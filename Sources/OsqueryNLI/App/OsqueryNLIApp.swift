@@ -31,6 +31,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
     private var popover: NSPopover?
     private var eventMonitor: Any?
 
+    // UserDefaults keys for window persistence
+    private let queryWindowFrameKey = "queryWindowFrame"
+
     // MARK: - NSWindowDelegate
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
@@ -42,14 +45,50 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
     func windowWillClose(_ notification: Notification) {
         guard let window = notification.object as? NSWindow else { return }
 
-        // Release window reference when closed to free memory
+        // Save window frame before closing
         if window === queryWindow {
+            saveWindowFrame(window, key: queryWindowFrameKey)
             queryWindow = nil
         } else if window === settingsWindow {
             settingsWindow = nil
         } else if window === historyWindow {
             historyWindow = nil
         }
+    }
+
+    func windowDidResize(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else { return }
+        if window === queryWindow {
+            saveWindowFrame(window, key: queryWindowFrameKey)
+        }
+    }
+
+    func windowDidMove(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else { return }
+        if window === queryWindow {
+            saveWindowFrame(window, key: queryWindowFrameKey)
+        }
+    }
+
+    private func saveWindowFrame(_ window: NSWindow, key: String) {
+        let frame = window.frame
+        let frameString = NSStringFromRect(frame)
+        UserDefaults.standard.set(frameString, forKey: key)
+    }
+
+    private func restoreWindowFrame(_ window: NSWindow, key: String, defaultSize: NSSize) {
+        if let frameString = UserDefaults.standard.string(forKey: key),
+           !frameString.isEmpty {
+            let frame = NSRectFromString(frameString)
+            // Validate frame is on screen
+            if frame.width > 100 && frame.height > 100 {
+                window.setFrame(frame, display: true)
+                return
+            }
+        }
+        // Default: center with default size
+        window.setContentSize(defaultSize)
+        window.center()
     }
 
     // MARK: - NSPopoverDelegate
@@ -246,8 +285,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
             )
             queryWindow?.title = "Osquery NLI"
             queryWindow?.contentView = NSHostingView(rootView: contentView)
-            queryWindow?.center()
             queryWindow?.delegate = self
+
+            // Restore saved window frame or use defaults
+            restoreWindowFrame(queryWindow!, key: queryWindowFrameKey, defaultSize: NSSize(width: 600, height: 500))
         }
 
         queryWindow?.makeKeyAndOrderFront(nil)

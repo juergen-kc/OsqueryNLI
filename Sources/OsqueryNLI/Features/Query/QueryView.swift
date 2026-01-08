@@ -191,6 +191,14 @@ struct QueryView: View {
                     vm.submitQuery()
                 }
                 .disabled(vm.isQuerying)
+                .onKeyPress(.upArrow) {
+                    vm.navigateHistoryUp()
+                    return .handled
+                }
+                .onKeyPress(.downArrow) {
+                    vm.navigateHistoryDown()
+                    return .handled
+                }
 
             Button {
                 vm.submitQuery()
@@ -389,6 +397,12 @@ struct QueryView: View {
                 Label("Browse All Templates", systemImage: "rectangle.stack")
             }
             .buttonStyle(.bordered)
+
+            // Keyboard shortcuts hint
+            Text("⌘↩ Submit • ⌘K Clear • ↑↓ History")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .padding(.top, 8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()

@@ -12,6 +12,20 @@ final class QueryViewModel {
     var showRawData: Bool = false
     var showingTemplates: Bool = false
 
+    // MARK: - Query Input History
+
+    private static let maxHistorySize = 50
+    private static let historyKey = "queryInputHistory"
+
+    /// History of submitted queries (most recent last)
+    private var inputHistory: [String] = []
+
+    /// Current position in history (-1 means not browsing history)
+    private var historyIndex: Int = -1
+
+    /// Temporary storage for current input when browsing history
+    private var savedCurrentInput: String = ""
+
     // MARK: - Dependencies
 
     private let appState: AppState
@@ -20,6 +34,15 @@ final class QueryViewModel {
 
     init(appState: AppState) {
         self.appState = appState
+        loadInputHistory()
+    }
+
+    private func loadInputHistory() {
+        inputHistory = UserDefaults.standard.stringArray(forKey: Self.historyKey) ?? []
+    }
+
+    private func saveInputHistory() {
+        UserDefaults.standard.set(inputHistory, forKey: Self.historyKey)
     }
 
     // MARK: - Computed Properties
@@ -48,6 +71,20 @@ final class QueryViewModel {
         let query = queryText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return }
 
+        // Add to input history (avoid duplicates at the end)
+        if inputHistory.last != query {
+            inputHistory.append(query)
+            // Trim history if too large
+            if inputHistory.count > Self.maxHistorySize {
+                inputHistory.removeFirst(inputHistory.count - Self.maxHistorySize)
+            }
+            saveInputHistory()
+        }
+
+        // Reset history navigation
+        historyIndex = -1
+        savedCurrentInput = ""
+
         Task {
             await appState.runQuery(query)
         }
@@ -55,9 +92,47 @@ final class QueryViewModel {
 
     func clearAndReset() {
         queryText = ""
+        historyIndex = -1
+        savedCurrentInput = ""
         appState.lastResult = nil
         appState.lastError = nil
         appState.currentQuery = ""
+    }
+
+    // MARK: - Input History Navigation
+
+    /// Navigate to previous query in history (↑ arrow)
+    func navigateHistoryUp() {
+        guard !inputHistory.isEmpty else { return }
+
+        if historyIndex == -1 {
+            // Starting to browse history, save current input
+            savedCurrentInput = queryText
+            historyIndex = inputHistory.count - 1
+        } else if historyIndex > 0 {
+            historyIndex -= 1
+        }
+
+        queryText = inputHistory[historyIndex]
+    }
+
+    /// Navigate to next query in history (↓ arrow)
+    func navigateHistoryDown() {
+        guard historyIndex != -1 else { return }
+
+        if historyIndex < inputHistory.count - 1 {
+            historyIndex += 1
+            queryText = inputHistory[historyIndex]
+        } else {
+            // Return to current input
+            historyIndex = -1
+            queryText = savedCurrentInput
+        }
+    }
+
+    /// Check if currently browsing history
+    var isBrowsingHistory: Bool {
+        historyIndex != -1
     }
 
     func retryLastQuery() {
