@@ -4,6 +4,8 @@
 
 Osquery NLI is a macOS menu bar app that lets you query your system using natural language instead of SQL. It uses AI (Gemini, Claude, or GPT) to translate your questions into osquery SQL and presents the results in a user-friendly format.
 
+![Osquery NLI Screenshot](docs/screenshot.png)
+
 ## Features
 
 - **Natural Language Queries** - Ask questions like "What apps start at login?" or "Which processes are using the most memory?"
