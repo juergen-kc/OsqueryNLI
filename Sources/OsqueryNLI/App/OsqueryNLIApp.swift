@@ -104,6 +104,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
         setupMenuBar()
         setupPopover()
         setupNotificationObservers()
+
+        // Check for updates (respects 24-hour cooldown)
+        UpdateChecker.shared.checkForUpdatesIfNeeded()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -215,6 +218,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
         settingsItem.target = self
         menu.addItem(settingsItem)
 
+        let updateItem = NSMenuItem(title: "Check for Updates...", action: #selector(checkForUpdates), keyEquivalent: "")
+        updateItem.target = self
+        menu.addItem(updateItem)
+
         menu.addItem(NSMenuItem.separator())
 
         let quitItem = NSMenuItem(title: "Quit Osquery NLI", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
@@ -314,6 +321,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
 
         settingsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc func checkForUpdates() {
+        UpdateChecker.shared.checkForUpdatesNow()
     }
 
     @objc func openHistory() {

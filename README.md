@@ -26,9 +26,20 @@ Osquery NLI is a macOS menu bar app that lets you query your system using natura
 
 ## Installation
 
-### From DMG (Recommended)
+### From Homebrew (Recommended)
 
-1. Download the latest `OsqueryNLI-x.x.x.dmg` from Releases
+```bash
+# Add the tap
+brew tap juergen-kc/tap
+
+# Install Osquery NLI (and osquery if needed)
+brew install --cask osquery-nli
+brew install osquery
+```
+
+### From DMG
+
+1. Download the latest `OsqueryNLI-x.x.x.dmg` from [Releases](https://github.com/juergen-kc/OsqueryNLI/releases)
 2. Open the DMG and drag `Osquery NLI.app` to Applications
 3. Launch from Applications or Spotlight
 
