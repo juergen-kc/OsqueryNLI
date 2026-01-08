@@ -63,6 +63,14 @@ struct HistoryView: View {
                 }
                 .pickerStyle(.menu)
                 .frame(width: 80)
+
+                Button {
+                    appState.refreshQueryHistory()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.borderless)
+                .help("Refresh history")
             }
             .padding(12)
             .background(.background)

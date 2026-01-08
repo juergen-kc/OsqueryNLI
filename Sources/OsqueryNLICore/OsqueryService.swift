@@ -87,6 +87,12 @@ public final class OsqueryService: OsqueryServiceProtocol, @unchecked Sendable {
             return siblingPath
         }
 
+        // Check directly next to executable (for MCP server standalone deployment)
+        let directSibling = (execDir as NSString).appendingPathComponent("ai_tables.ext")
+        if FileManager.default.fileExists(atPath: directSibling) {
+            return directSibling
+        }
+
         return nil
     }
 
@@ -117,13 +123,16 @@ public final class OsqueryService: OsqueryServiceProtocol, @unchecked Sendable {
         // system daemon typically doesn't have our AI tables extension loaded.
         if aiDiscoveryEnabled, let extensionPath = bundledExtensionPath {
             // Load bundled extension directly with isolated socket
-            // Use UUID for unique socket per query to avoid conflicts
-            let socketPath = "/tmp/osquery_nli_\(UUID().uuidString).sock"
+            // Use short random suffix to avoid socket path length limit (~97 chars on macOS)
+            // Use /tmp/ directly as sandbox temp dirs can have very long paths
+            let shortId = String(UUID().uuidString.prefix(8))
+            let socketPath = "/tmp/oq_\(shortId).sock"
             args.append(contentsOf: [
                 "--extensions_socket", socketPath,
                 "--extension", extensionPath,
                 "--extensions_require=ai_tables",
                 "--extensions_timeout=10",
+                "--extensions_autoload=/dev/null",  // Prevent loading system extensions
                 "--disable_database"
             ])
         } else if isDaemonRunning {
@@ -412,11 +421,11 @@ public final class OsqueryService: OsqueryServiceProtocol, @unchecked Sendable {
 
         // Check for shell escape attempts (semicolons followed by commands, etc.)
         // Note: Multiple SELECT statements separated by ; are valid in osquery
+        // Note: > and < are valid SQL comparison operators and safe since we use direct process execution
         let dangerousPatterns = [
             "$(", "`",           // Command substitution
             "&&", "||",         // Shell operators
             "|",                // Pipe
-            ">", "<",           // Redirects
             "\n", "\r",         // Newlines (could be used for injection)
             "\\x", "\\u"        // Escape sequences
         ]
@@ -440,7 +449,10 @@ extension OsqueryService {
         "ai_browser_extensions",
         "ai_code_assistants",
         "ai_api_keys",
-        "ai_local_servers"
+        "ai_local_servers",
+        "ai_models_downloaded",
+        "ai_containers",
+        "ai_sdk_dependencies"
     ]
 
     /// Hardcoded schemas for AI Discovery tables (faster than PRAGMA queries)
@@ -521,6 +533,42 @@ extension OsqueryService {
               model_loaded TEXT,
               version TEXT
             );
+            """,
+        "ai_models_downloaded": """
+            CREATE TABLE ai_models_downloaded (
+              name TEXT,
+              provider TEXT,
+              path TEXT,
+              format TEXT,
+              size_bytes BIGINT,
+              size_human TEXT,
+              quantization TEXT,
+              modified_time TEXT
+            );
+            """,
+        "ai_containers": """
+            CREATE TABLE ai_containers (
+              container_id TEXT,
+              container_name TEXT,
+              image TEXT,
+              runtime TEXT,
+              status TEXT,
+              ports TEXT,
+              gpu_enabled TEXT,
+              category TEXT,
+              created TEXT
+            );
+            """,
+        "ai_sdk_dependencies": """
+            CREATE TABLE ai_sdk_dependencies (
+              project_path TEXT,
+              project_name TEXT,
+              package_manager TEXT,
+              dependency_name TEXT,
+              version TEXT,
+              dependency_type TEXT,
+              category TEXT
+            );
             """
     ]
 
@@ -579,7 +627,10 @@ extension OsqueryService {
         "ai_browser_extensions",
         "ai_code_assistants",
         "ai_api_keys",
-        "ai_local_servers"
+        "ai_local_servers",
+        "ai_models_downloaded",
+        "ai_containers",
+        "ai_sdk_dependencies"
     ]
 
     /// Default enabled tables for new installations - comprehensive set for common queries
@@ -619,6 +670,9 @@ extension OsqueryService {
         "ai_browser_extensions",
         "ai_code_assistants",
         "ai_api_keys",
-        "ai_local_servers"
+        "ai_local_servers",
+        "ai_models_downloaded",
+        "ai_containers",
+        "ai_sdk_dependencies"
     ]
 }

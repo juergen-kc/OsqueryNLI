@@ -1,8 +1,8 @@
 cask "osquery-nli" do
-  version "1.0.0"
-  sha256 "134c6c9bdb7883b5f945503d223ca638e0aeb4ce09f90b51cf2056eab871ae05"
+  version "1.0.4"
+  sha256 "9743b501584c27d63bf21148c58593fb174b369d9188174b34826692849a7c17"
 
-  url "https://github.com/juergen-kc/OsqueryNLI/releases/download/release/OsqueryNLI-#{version}.dmg"
+  url "https://github.com/juergen-kc/OsqueryNLI/releases/download/#{version}/OsqueryNLI-#{version}.dmg"
   name "Osquery NLI"
   desc "Natural language interface for osquery - ask questions about your Mac in plain English"
   homepage "https://github.com/juergen-kc/OsqueryNLI"

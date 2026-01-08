@@ -25,7 +25,7 @@ set -e
 # Configuration
 APP_NAME="Osquery NLI"
 BUNDLE_ID="com.klaassen.OsqueryNLI"
-VERSION="1.0.0"
+VERSION="1.0.4"
 SIGNING_IDENTITY="Developer ID Application"  # Will auto-select your cert
 NOTARIZE_PROFILE="AC_PASSWORD"  # Name used in store-credentials
 TEAM_ID="E89Q3796E9"

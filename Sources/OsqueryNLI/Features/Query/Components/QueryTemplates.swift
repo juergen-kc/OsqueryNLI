@@ -498,6 +498,36 @@ enum QueryTemplateLibrary {
                     query: "Give me a complete inventory of all AI tools, services, and configurations on this system",
                     description: "Comprehensive AI footprint analysis",
                     icon: "list.clipboard"
+                ),
+                QueryTemplate(
+                    title: "Downloaded AI Models",
+                    query: "What AI models are downloaded locally?",
+                    description: "Ollama, LM Studio, HuggingFace models",
+                    icon: "cube.box"
+                ),
+                QueryTemplate(
+                    title: "AI Containers",
+                    query: "What AI-related containers are running?",
+                    description: "Docker/Podman AI workloads",
+                    icon: "shippingbox"
+                ),
+                QueryTemplate(
+                    title: "AI SDK Dependencies",
+                    query: "What AI libraries are used in my projects?",
+                    description: "OpenAI, LangChain, PyTorch in projects",
+                    icon: "books.vertical"
+                ),
+                QueryTemplate(
+                    title: "Large Language Models",
+                    query: "What LLMs are downloaded and how big are they?",
+                    description: "Model sizes and quantization levels",
+                    icon: "text.bubble"
+                ),
+                QueryTemplate(
+                    title: "GPU AI Workloads",
+                    query: "What AI containers are using the GPU?",
+                    description: "GPU-accelerated AI containers",
+                    icon: "rectangle.stack.badge.play"
                 )
             ]
         )
