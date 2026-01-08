@@ -1,0 +1,29 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Swift Package Manager
+/.build
+/Packages
+/.swiftpm
+.swiftpm/configuration/registries.json
+.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
+
+# Xcode
+xcuserdata/
+DerivedData/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Distribution artifacts (use GitHub Releases instead)
+/dist/
+
+# Credentials
+.netrc
+*.pem
+*.key
+
+# IDE
+.idea/
+*.swp
+*~
