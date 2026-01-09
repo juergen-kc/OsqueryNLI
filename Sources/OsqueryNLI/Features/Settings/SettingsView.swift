@@ -19,13 +19,19 @@ struct SettingsView: View {
                     Label("Tables", systemImage: "tablecells")
                 }
 
+            AppearanceSettingsView()
+                .environment(appState)
+                .tabItem {
+                    Label("Appearance", systemImage: "textformat.size")
+                }
+
             GeneralSettingsView()
                 .environment(appState)
                 .tabItem {
                     Label("General", systemImage: "gearshape")
                 }
         }
-        .frame(width: 480, height: 400)
+        .frame(width: 500, height: 450)
     }
 }
 
@@ -336,6 +342,64 @@ struct TableSettingsView: View {
     }
 }
 
+// MARK: - Appearance Settings
+
+struct AppearanceSettingsView: View {
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
+        @Bindable var appState = appState
+
+        Form {
+            Section("Text Size") {
+                Picker("Font Scale", selection: $appState.fontScale) {
+                    ForEach(FontScale.allCases) { scale in
+                        Text(scale.rawValue).tag(scale)
+                    }
+                }
+                .pickerStyle(.inline)
+
+                Text(appState.fontScale.description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                // Preview
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Preview")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Query Result")
+                            .font(.system(size: 13 * appState.fontScale.scaleFactor, weight: .semibold))
+                        Text("This is how body text will appear in the app.")
+                            .font(.system(size: 13 * appState.fontScale.scaleFactor))
+                        Text("Caption text for additional details")
+                            .font(.system(size: 10 * appState.fontScale.scaleFactor))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.quaternary.opacity(0.5))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+            }
+
+            Section {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Changes apply immediately to all views.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("Note: Some UI elements may require reopening windows to update.")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
 // MARK: - General Settings
 
 struct GeneralSettingsView: View {
@@ -343,6 +407,13 @@ struct GeneralSettingsView: View {
     @State private var showClearConfirmation: Bool = false
     @State private var showCopiedToast: Bool = false
     @State private var copiedConfigType: String = ""
+
+    /// App version from Info.plist
+    private var appVersion: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
+        return build.isEmpty ? version : "\(version) (\(build))"
+    }
 
     var body: some View {
         @Bindable var appState = appState
@@ -485,7 +556,7 @@ struct GeneralSettingsView: View {
                 HStack {
                     Text("Version")
                     Spacer()
-                    Text("1.0.5")
+                    Text(appVersion)
                         .foregroundStyle(.secondary)
                 }
 

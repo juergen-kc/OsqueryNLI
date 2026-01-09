@@ -38,6 +38,14 @@ final class AppState {
         }
     }
 
+    // MARK: - UI Settings
+
+    var fontScale: FontScale {
+        didSet {
+            UserDefaults.standard.set(fontScale.rawValue, forKey: "fontScale")
+        }
+    }
+
     /// Add AI Discovery tables to enabledTables if not already present
     private func addAITablesToEnabled() {
         let aiTables = Set(OsqueryService.aiDiscoveryTables)
@@ -216,6 +224,10 @@ final class AppState {
             ? true
             : UserDefaults.standard.bool(forKey: "aiDiscoveryEnabled")
         self.aiDiscoveryEnabled = aiEnabled
+
+        // Load UI settings
+        let fontScaleRaw = UserDefaults.standard.string(forKey: "fontScale") ?? FontScale.regular.rawValue
+        self.fontScale = FontScale(rawValue: fontScaleRaw) ?? .regular
 
         // Initialize services
         self.osqueryService = OsqueryService()

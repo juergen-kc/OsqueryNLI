@@ -165,6 +165,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
             }
         )
         .environment(appState)
+        .environment(\.fontScale, appState.fontScale)
 
         popover?.contentViewController = NSHostingController(rootView: popoverView)
     }
@@ -283,6 +284,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
         if queryWindow == nil {
             let contentView = QueryView()
                 .environment(appState)
+                .environment(\.fontScale, appState.fontScale)
 
             queryWindow = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 600, height: 500),
@@ -306,6 +308,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
         if settingsWindow == nil {
             let contentView = SettingsView()
                 .environment(appState)
+                .environment(\.fontScale, appState.fontScale)
 
             settingsWindow = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 500, height: 400),
@@ -331,6 +334,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
         if historyWindow == nil {
             let contentView = HistoryView()
                 .environment(appState)
+                .environment(\.fontScale, appState.fontScale)
 
             historyWindow = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 500, height: 600),

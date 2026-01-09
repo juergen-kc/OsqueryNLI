@@ -149,6 +149,18 @@ final class QueryViewModel {
         savedCurrentInput = ""
     }
 
+    /// Recent queries for dropdown (most recent first, limited to 10)
+    var recentQueries: [String] {
+        Array(inputHistory.suffix(10).reversed())
+    }
+
+    /// Select a query from the recent queries dropdown
+    func selectRecentQuery(_ query: String) {
+        queryText = query
+        historyIndex = -1
+        savedCurrentInput = ""
+    }
+
     func retryLastQuery() {
         let query = appState.currentQuery
         guard !query.isEmpty else { return }

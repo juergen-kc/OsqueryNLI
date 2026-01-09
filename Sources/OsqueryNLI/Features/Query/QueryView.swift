@@ -207,6 +207,28 @@ struct QueryView: View {
                 .help("Browse query templates")
                 .accessibilityLabel("Browse query templates")
 
+                // Recent queries dropdown
+                if !vm.recentQueries.isEmpty {
+                    Menu {
+                        ForEach(vm.recentQueries, id: \.self) { query in
+                            Button {
+                                vm.selectRecentQuery(query)
+                            } label: {
+                                Text(query)
+                                    .lineLimit(1)
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.title3)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .frame(width: 24)
+                    .foregroundStyle(.secondary)
+                    .help("Recent queries")
+                    .accessibilityLabel("Recent queries")
+                }
+
                 TextField("Ask about your system...", text: $bindableVM.queryText, axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(.body)
@@ -610,39 +632,77 @@ struct QueryView: View {
 struct ResultsTableView: View {
     let result: QueryResult
     let colorScheme: ColorScheme
+    @Environment(\.fontScale) private var fontScale
+
+    /// Sorting state
+    @State private var sortColumn: String? = nil
+    @State private var sortAscending: Bool = true
 
     /// Maximum rows to display in the table view for performance
     private static let maxDisplayRows = 1000
 
     /// Whether results are truncated for display
     private var isTruncated: Bool {
-        result.rows.count > Self.maxDisplayRows
+        sortedRows.count > Self.maxDisplayRows
+    }
+
+    /// Sorted rows based on current sort column
+    private var sortedRows: [[String: String]] {
+        guard let column = sortColumn else { return result.rows }
+
+        return result.rows.sorted { row1, row2 in
+            let val1 = row1[column] ?? ""
+            let val2 = row2[column] ?? ""
+
+            // Try numeric comparison first
+            if let num1 = Double(val1), let num2 = Double(val2) {
+                return sortAscending ? num1 < num2 : num1 > num2
+            }
+
+            // Fall back to string comparison
+            return sortAscending
+                ? val1.localizedCaseInsensitiveCompare(val2) == .orderedAscending
+                : val1.localizedCaseInsensitiveCompare(val2) == .orderedDescending
+        }
     }
 
     /// Rows to display (limited for performance)
     private var displayRows: ArraySlice<[String: String]> {
-        result.rows.prefix(Self.maxDisplayRows)
+        sortedRows.prefix(Self.maxDisplayRows)
+    }
+
+    /// Base font size for table content (scaled by fontScale)
+    private var scaledFontSize: CGFloat {
+        10 * fontScale.scaleFactor
+    }
+
+    /// Base font size for table headers (scaled by fontScale)
+    private var scaledHeaderFontSize: CGFloat {
+        10 * fontScale.scaleFactor
     }
 
     // Calculate column widths based on content (samples first 100 rows for performance)
     private var columnWidths: [String: CGFloat] {
         var widths: [String: CGFloat] = [:]
         let sampleRows = result.rows.prefix(100)
+        let charWidth = 7 * fontScale.scaleFactor
 
         for column in result.columns {
-            // Start with header width (estimate 8pt per character + padding)
-            var maxWidth = CGFloat(column.name.count) * 8 + 24
+            // Start with header width (estimate scaled char width + padding)
+            var maxWidth = CGFloat(column.name.count) * charWidth + 24
 
             // Check sampled row values
             for row in sampleRows {
                 if let value = row[column.name] {
-                    let valueWidth = CGFloat(min(value.count, 40)) * 7 + 24
+                    let valueWidth = CGFloat(min(value.count, 40)) * charWidth + 24
                     maxWidth = max(maxWidth, valueWidth)
                 }
             }
 
-            // Clamp between min and max
-            widths[column.name] = min(max(maxWidth, 60), 250)
+            // Clamp between min and max (scaled)
+            let minWidth: CGFloat = 60 * fontScale.scaleFactor
+            let maxWidthLimit: CGFloat = 250 * fontScale.scaleFactor
+            widths[column.name] = min(max(maxWidth, minWidth), maxWidthLimit)
         }
 
         return widths
@@ -662,7 +722,7 @@ struct ResultsTableView: View {
                             HStack(spacing: 0) {
                                 ForEach(result.columns) { column in
                                     Text(row[column.name] ?? "-")
-                                        .font(.system(.caption, design: .monospaced))
+                                        .font(.system(size: scaledFontSize, design: .monospaced))
                                         .textSelection(.enabled)
                                         .lineLimit(2)
                                         .truncationMode(.tail)
@@ -675,15 +735,32 @@ struct ResultsTableView: View {
                             .background(alternatingRowColor(index: index))
                         }
                     } header: {
-                        // Sticky header row
+                        // Sticky header row with sortable columns
                         HStack(spacing: 0) {
                             ForEach(result.columns) { column in
-                                Text(column.name)
-                                    .font(.system(.caption, weight: .semibold))
-                                    .foregroundStyle(.primary)
+                                Button {
+                                    toggleSort(column.name)
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Text(column.name)
+                                            .font(.system(size: scaledHeaderFontSize, weight: .semibold))
+                                            .foregroundStyle(.primary)
+
+                                        if sortColumn == column.name {
+                                            Image(systemName: sortAscending ? "chevron.up" : "chevron.down")
+                                                .font(.system(size: 8, weight: .bold))
+                                                .foregroundStyle(.secondary)
+                                        }
+
+                                        Spacer()
+                                    }
                                     .frame(width: columnWidths[column.name] ?? 100, alignment: .leading)
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 10)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .help("Click to sort by \(column.name)")
                             }
                         }
                         .background(
@@ -727,6 +804,23 @@ struct ResultsTableView: View {
             return colorScheme == .dark
                 ? Color.white.opacity(0.03)
                 : Color.black.opacity(0.03)
+        }
+    }
+
+    private func toggleSort(_ column: String) {
+        if sortColumn == column {
+            // Toggle direction or clear sort
+            if sortAscending {
+                sortAscending = false
+            } else {
+                // Third click clears sorting
+                sortColumn = nil
+                sortAscending = true
+            }
+        } else {
+            // New column, sort ascending
+            sortColumn = column
+            sortAscending = true
         }
     }
 }

@@ -10,6 +10,7 @@ enum HistoryFilter: String, CaseIterable {
 struct HistoryView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openWindow) var openWindow
+    @Environment(\.fontScale) private var fontScale
     @State private var searchText: String = ""
     @State private var selectedEntry: QueryHistoryEntry?
     @State private var historyFilter: HistoryFilter = .all
@@ -95,16 +96,16 @@ struct HistoryView: View {
     private var emptyStateView: some View {
         VStack(spacing: 16) {
             Image(systemName: "clock.badge.questionmark")
-                .font(.system(size: 48))
+                .font(.system(size: 48 * fontScale.scaleFactor))
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(Color.accentColor)
 
             Text("No History Yet")
-                .font(.headline)
+                .font(.system(size: 13 * fontScale.scaleFactor, weight: .semibold))
                 .foregroundStyle(.secondary)
 
             Text("Your queries will appear here")
-                .font(.caption)
+                .font(.system(size: 10 * fontScale.scaleFactor))
                 .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -113,21 +114,21 @@ struct HistoryView: View {
     private var noResultsView: some View {
         VStack(spacing: 16) {
             Image(systemName: "doc.text.magnifyingglass")
-                .font(.system(size: 32))
+                .font(.system(size: 32 * fontScale.scaleFactor))
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(.secondary)
 
             Text("No Results")
-                .font(.headline)
+                .font(.system(size: 13 * fontScale.scaleFactor, weight: .semibold))
                 .foregroundStyle(.secondary)
 
             if !searchText.isEmpty {
                 Text("No queries match \"\(searchText)\"")
-                    .font(.caption)
+                    .font(.system(size: 10 * fontScale.scaleFactor))
                     .foregroundStyle(.tertiary)
             } else {
                 Text("No \(historyFilter.rawValue.lowercased()) queries found")
-                    .font(.caption)
+                    .font(.system(size: 10 * fontScale.scaleFactor))
                     .foregroundStyle(.tertiary)
             }
         }
@@ -139,6 +140,7 @@ struct HistoryView: View {
             ForEach(filteredEntries) { entry in
                 HistoryRowView(
                     entry: entry,
+                    fontScale: fontScale,
                     onRun: { runQuery(entry.query) },
                     onCopy: { copyQuery(entry.query) },
                     onDelete: { deleteEntry(entry) }
@@ -187,6 +189,7 @@ struct HistoryView: View {
 
 struct HistoryRowView: View {
     let entry: QueryHistoryEntry
+    let fontScale: FontScale
     let onRun: () -> Void
     let onCopy: () -> Void
     let onDelete: () -> Void
@@ -208,12 +211,11 @@ struct HistoryRowView: View {
                 HStack(spacing: 6) {
                     Text(entry.query)
                         .lineLimit(2)
-                        .font(.body)
+                        .font(.system(size: 13 * fontScale.scaleFactor))
 
                     if entry.source == .mcp {
                         Text("MCP")
-                            .font(.caption2)
-                            .fontWeight(.medium)
+                            .font(.system(size: 9 * fontScale.scaleFactor, weight: .medium))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Color.blue.opacity(0.15))
@@ -224,12 +226,12 @@ struct HistoryRowView: View {
 
                 HStack(spacing: 8) {
                     Text(timeAgo)
-                        .font(.caption)
+                        .font(.system(size: 10 * fontScale.scaleFactor))
                         .foregroundStyle(.tertiary)
 
                     if let rowCount = entry.rowCount {
                         Text("\(rowCount) rows")
-                            .font(.caption)
+                            .font(.system(size: 10 * fontScale.scaleFactor))
                             .foregroundStyle(.tertiary)
                     }
                 }
