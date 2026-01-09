@@ -25,7 +25,6 @@ set -e
 # Configuration
 APP_NAME="Osquery NLI"
 BUNDLE_ID="com.klaassen.OsqueryNLI"
-VERSION="1.0.4"
 SIGNING_IDENTITY="Developer ID Application"  # Will auto-select your cert
 NOTARIZE_PROFILE="AC_PASSWORD"  # Name used in store-credentials
 TEAM_ID="E89Q3796E9"
@@ -34,6 +33,11 @@ APPLE_ID="juergen.klaassen@web.de"
 # Paths
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+# Read version from Distribution/Info.plist (single source of truth)
+DIST_PLIST="$PROJECT_DIR/Distribution/Info.plist"
+VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$DIST_PLIST")
+BUILD_NUMBER=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$DIST_PLIST")
 BUILD_DIR="$PROJECT_DIR/.build/release"
 DIST_DIR="$PROJECT_DIR/Distribution"
 OUTPUT_DIR="$PROJECT_DIR/dist"
@@ -127,13 +131,11 @@ else
     warn "AI Discovery extension not found at $AI_EXTENSION"
 fi
 
-# Copy Info.plist
+# Copy Info.plist (already contains correct version from Distribution/)
 cp "$DIST_DIR/Info.plist" "$APP_BUNDLE/Contents/"
 
-# Update version in Info.plist
-/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP_BUNDLE/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$APP_BUNDLE/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_ID" "$APP_BUNDLE/Contents/Info.plist"
+# Verify version in Info.plist
+log "Using version $VERSION (build $BUILD_NUMBER) from Distribution/Info.plist"
 
 # =============================================================================
 # Step 3: Generate App Icon
