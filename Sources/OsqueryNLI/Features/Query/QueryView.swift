@@ -78,10 +78,12 @@ struct QueryView: View {
                     .keyboardShortcut("k", modifiers: .command)
                     .opacity(0)
 
-                // Escape to cancel
+                // Escape to cancel query or exit history
                 Button("") {
                     if vm.isQuerying {
                         vm.cancelQuery()
+                    } else if vm.isBrowsingHistory {
+                        vm.exitHistoryBrowsing()
                     }
                 }
                 .keyboardShortcut(.escape, modifiers: [])
@@ -191,62 +193,80 @@ struct QueryView: View {
     private func queryInputView(_ vm: QueryViewModel) -> some View {
         @Bindable var bindableVM = vm
 
-        HStack(spacing: 12) {
-            // Templates button
-            Button {
-                vm.showingTemplates = true
-            } label: {
-                Image(systemName: "rectangle.stack")
-                    .font(.title3)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .help("Browse query templates")
-            .accessibilityLabel("Browse query templates")
+        VStack(spacing: 6) {
+            HStack(spacing: 12) {
+                // Templates button
+                Button {
+                    vm.showingTemplates = true
+                } label: {
+                    Image(systemName: "rectangle.stack")
+                        .font(.title3)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Browse query templates")
+                .accessibilityLabel("Browse query templates")
 
-            TextField("Ask about your system...", text: $bindableVM.queryText, axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(.body)
-                .lineLimit(1...3)
-                .focused($isInputFocused)
-                .onSubmit {
+                TextField("Ask about your system...", text: $bindableVM.queryText, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(.body)
+                    .lineLimit(1...3)
+                    .focused($isInputFocused)
+                    .onSubmit {
+                        vm.submitQuery()
+                    }
+                    .disabled(vm.isQuerying)
+                    .onKeyPress(.upArrow) {
+                        vm.navigateHistoryUp()
+                        return .handled
+                    }
+                    .onKeyPress(.downArrow) {
+                        vm.navigateHistoryDown()
+                        return .handled
+                    }
+
+                Button {
                     vm.submitQuery()
+                } label: {
+                    if vm.isQuerying {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                            .frame(width: 20, height: 20)
+                    } else {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.title2)
+                    }
                 }
-                .disabled(vm.isQuerying)
-                .onKeyPress(.upArrow) {
-                    vm.navigateHistoryUp()
-                    return .handled
-                }
-                .onKeyPress(.downArrow) {
-                    vm.navigateHistoryDown()
-                    return .handled
-                }
-
-            Button {
-                vm.submitQuery()
-            } label: {
-                if vm.isQuerying {
-                    ProgressView()
-                        .scaleEffect(0.7)
-                        .frame(width: 20, height: 20)
-                } else {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.title2)
-                }
+                .buttonStyle(.plain)
+                .foregroundStyle(vm.queryText.isEmpty ? Color.secondary : Color.accentColor)
+                .disabled(!vm.canSubmit)
+                .help("Submit query (⌘↩)")
+                .accessibilityLabel("Submit query")
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(vm.queryText.isEmpty ? Color.secondary : Color.accentColor)
-            .disabled(!vm.canSubmit)
-            .help("Submit query (⌘↩)")
-            .accessibilityLabel("Submit query")
+            .padding(12)
+            .background(.background)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(.quaternary, lineWidth: 1)
+            )
+
+            // Input hint
+            if vm.isBrowsingHistory {
+                HStack(spacing: 4) {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.caption2)
+                    Text("Browsing history")
+                        .font(.caption2)
+                    Text("• ↓ for newer • Esc to exit")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                .foregroundStyle(.secondary)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
-        .padding(12)
-        .background(.background)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(.quaternary, lineWidth: 1)
-        )
+        .animation(.easeInOut(duration: 0.15), value: vm.isBrowsingHistory)
         .sheet(isPresented: $bindableVM.showingTemplates) {
             QueryTemplatesView { query in
                 vm.selectTemplate(query)
@@ -258,15 +278,20 @@ struct QueryView: View {
 
     @ViewBuilder
     private func resultsView(_ vm: QueryViewModel) -> some View {
-        if vm.isQuerying {
-            loadingView(vm)
-        } else if let error = vm.lastError {
-            errorView(vm, error: error)
-        } else if let result = vm.lastResult {
-            resultContentView(vm, result: result)
-        } else {
-            emptyStateView(vm)
+        Group {
+            if vm.isQuerying {
+                loadingView(vm)
+            } else if let error = vm.lastError {
+                errorView(vm, error: error)
+                    .transition(.opacity.animation(.easeInOut(duration: 0.2)))
+            } else if let result = vm.lastResult {
+                resultContentView(vm, result: result)
+                    .transition(.opacity.animation(.easeInOut(duration: 0.2)))
+            } else {
+                emptyStateView(vm)
+            }
         }
+        .animation(.easeInOut(duration: 0.2), value: vm.isQuerying)
     }
 
     private func loadingView(_ vm: QueryViewModel) -> some View {
@@ -322,8 +347,10 @@ struct QueryView: View {
 
         return HStack(spacing: 4) {
             Circle()
-                .fill(isActive ? Color.accentColor : (isPast ? Color.green : Color.secondary.opacity(0.3)))
+                .fill(isActive ? Color.accentColor : (isPast ? Color.green : Color.secondary.opacity(0.5)))
                 .frame(width: 8, height: 8)
+                .scaleEffect(isActive ? 1.0 : 0.9)
+                .animation(.easeInOut(duration: 0.3), value: isActive)
             Text(vm.stageName(stage))
                 .font(.caption2)
                 .foregroundStyle(isActive ? Color.primary : Color.secondary)
@@ -375,9 +402,10 @@ struct QueryView: View {
 
     private func emptyStateView(_ vm: QueryViewModel) -> some View {
         VStack(spacing: 20) {
-            Image(systemName: "text.bubble")
+            Image(systemName: "bubble.left.and.text.bubble.right")
                 .font(.system(size: 48))
-                .foregroundStyle(.tertiary)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(Color.accentColor)
 
             Text("Ask a question about your system")
                 .font(.headline)
@@ -394,21 +422,10 @@ struct QueryView: View {
                     GridItem(.flexible())
                 ], spacing: 8) {
                     ForEach(vm.exampleQueries, id: \.self) { example in
-                        Button {
+                        QuickStartButton(text: example) {
                             vm.queryText = example
                             vm.submitQuery()
-                        } label: {
-                            Text(example)
-                                .font(.caption)
-                                .lineLimit(2)
-                                .multilineTextAlignment(.leading)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(10)
-                                .background(.quaternary.opacity(0.5))
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
                         }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.primary)
                     }
                 }
             }
@@ -425,10 +442,13 @@ struct QueryView: View {
             .buttonStyle(.bordered)
 
             // Keyboard shortcuts hint
-            Text("⌘↩ Submit • ⌘K Clear • ↑↓ History")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .padding(.top, 8)
+            HStack(spacing: 16) {
+                shortcutHint("⌘↩", "Submit")
+                shortcutHint("⌘K", "Clear")
+                shortcutHint("↑↓", "History")
+                shortcutHint("Esc", "Cancel")
+            }
+            .padding(.top, 8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
@@ -707,6 +727,65 @@ struct ResultsTableView: View {
             return colorScheme == .dark
                 ? Color.white.opacity(0.03)
                 : Color.black.opacity(0.03)
+        }
+    }
+}
+
+// MARK: - Quick Start Button
+
+private struct QuickStartButton: View {
+    let text: String
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(text)
+                .font(.caption)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(10)
+                .background(isHovered ? Color.accentColor.opacity(0.1) : Color.secondary.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(isHovered ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.primary)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
+    }
+}
+
+// MARK: - Keyboard Shortcut Hint
+
+private struct shortcutHint: View {
+    let shortcut: String
+    let label: String
+
+    init(_ shortcut: String, _ label: String) {
+        self.shortcut = shortcut
+        self.label = label
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(shortcut)
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(.secondary.opacity(0.15))
+                .clipShape(RoundedRectangle(cornerRadius: 3))
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
     }
 }

@@ -141,6 +141,14 @@ final class QueryViewModel {
         historyIndex != -1
     }
 
+    /// Exit history browsing and restore current input
+    func exitHistoryBrowsing() {
+        guard historyIndex != -1 else { return }
+        queryText = savedCurrentInput
+        historyIndex = -1
+        savedCurrentInput = ""
+    }
+
     func retryLastQuery() {
         let query = appState.currentQuery
         guard !query.isEmpty else { return }

@@ -94,9 +94,10 @@ struct HistoryView: View {
 
     private var emptyStateView: some View {
         VStack(spacing: 16) {
-            Image(systemName: "clock.arrow.circlepath")
+            Image(systemName: "clock.badge.questionmark")
                 .font(.system(size: 48))
-                .foregroundStyle(.tertiary)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(Color.accentColor)
 
             Text("No History Yet")
                 .font(.headline)
@@ -111,9 +112,10 @@ struct HistoryView: View {
 
     private var noResultsView: some View {
         VStack(spacing: 16) {
-            Image(systemName: "magnifyingglass")
+            Image(systemName: "doc.text.magnifyingglass")
                 .font(.system(size: 32))
-                .foregroundStyle(.tertiary)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.secondary)
 
             Text("No Results")
                 .font(.headline)

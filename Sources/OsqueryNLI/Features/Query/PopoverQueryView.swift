@@ -259,9 +259,10 @@ struct PopoverQueryView: View {
 
     private var emptyStateView: some View {
         VStack(spacing: 8) {
-            Image(systemName: "text.bubble")
+            Image(systemName: "bubble.left.and.text.bubble.right")
                 .font(.title)
-                .foregroundStyle(.tertiary)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(Color.accentColor)
 
             Text("Ask a question about your system")
                 .font(.caption)
