@@ -5,6 +5,19 @@ All notable changes to Osquery NLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.8] - 2025-01-09
+
+### Added
+- **Keyboard shortcuts overlay** (⌘?) - Quick reference for all shortcuts with tips
+- **Query auto-complete** - Smart suggestions from tables, favorites, history, and keywords
+- **Animated loading states** - Stage-specific icons with rotating ring animation
+- **Menu bar status indicator** - Animated color cycling when query is running
+
+### Changed
+- Loading view now shows progress connectors between stages
+- Improved keyboard navigation in auto-complete (↑/↓/Enter/Esc)
+- Menu bar tooltip shows current status
+
 ## [1.0.7] - 2025-01-09
 
 ### Added
@@ -13,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `osquery_history` - View query history from app and MCP with filtering
   - `osquery_examples` - Get example queries for 16 common tables
 - Example queries for processes, users, apps, network, security, and AI tables
+- Unit tests expanded from 17 to 84 tests
 
 ### Changed
 - MCP server now has 8 tools total for comprehensive osquery interaction
@@ -114,6 +128,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - osquery integration via osqueryi CLI
 - AI Discovery extension written in Go
 
+[1.0.8]: https://github.com/juergen-kc/OsqueryNLI/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/juergen-kc/OsqueryNLI/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/juergen-kc/OsqueryNLI/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/juergen-kc/OsqueryNLI/compare/v1.0.4...v1.0.5
