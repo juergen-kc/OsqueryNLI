@@ -18,6 +18,8 @@ let package = Package(
         .package(url: "https://github.com/google/generative-ai-swift", from: "0.4.0"),
         // MCP (Model Context Protocol) SDK
         .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.7.1"),
+        // Swift Testing (Command Line Tools SDK doesn't include it)
+        .package(url: "https://github.com/swiftlang/swift-testing.git", from: "0.12.0"),
     ],
     targets: [
         // Shared core library (osquery service, utilities)
@@ -48,9 +50,12 @@ let package = Package(
             path: "Sources/OsqueryMCPServer"
         ),
         .testTarget(
-            name: "OsqueryNLITests",
-            dependencies: ["OsqueryNLI"],
-            path: "Tests/OsqueryNLITests"
+            name: "OsqueryNLICoreTests",
+            dependencies: [
+                "OsqueryNLICore",
+                .product(name: "Testing", package: "swift-testing"),
+            ],
+            path: "Tests/OsqueryNLICoreTests"
         ),
     ]
 )

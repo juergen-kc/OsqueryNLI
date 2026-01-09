@@ -5,13 +5,10 @@ public final class QueryHistoryLogger: Sendable {
     public static let shared = QueryHistoryLogger()
 
     /// Maximum number of entries to keep in history
-    private let maxEntries = 100
+    public let maxEntries: Int
 
     /// The directory for storing history files
-    private var historyDirectory: URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return appSupport.appendingPathComponent("OsqueryNLI", isDirectory: true)
-    }
+    private let historyDirectory: URL
 
     /// The path to the history JSON file
     private var historyFileURL: URL {
@@ -19,7 +16,20 @@ public final class QueryHistoryLogger: Sendable {
     }
 
     private init() {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        self.historyDirectory = appSupport.appendingPathComponent("OsqueryNLI", isDirectory: true)
+        self.maxEntries = 100
         // Ensure directory exists
+        try? FileManager.default.createDirectory(at: historyDirectory, withIntermediateDirectories: true)
+    }
+
+    /// Initialize with a custom directory (for testing)
+    /// - Parameters:
+    ///   - directory: Custom directory URL for storing history
+    ///   - maxEntries: Maximum number of entries to keep (default 100)
+    public init(directory: URL, maxEntries: Int = 100) {
+        self.historyDirectory = directory
+        self.maxEntries = maxEntries
         try? FileManager.default.createDirectory(at: historyDirectory, withIntermediateDirectories: true)
     }
 
