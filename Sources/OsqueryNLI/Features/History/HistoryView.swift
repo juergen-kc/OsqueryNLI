@@ -71,6 +71,7 @@ struct HistoryView: View {
                 }
                 .buttonStyle(.borderless)
                 .help("Refresh history")
+                .accessibilityLabel("Refresh history")
             }
             .padding(12)
             .background(.background)
@@ -245,6 +246,7 @@ struct HistoryRowView: View {
                     .buttonStyle(.borderless)
                     .foregroundStyle(Color.accentColor)
                     .help("Run query")
+                    .accessibilityLabel("Run query")
 
                     Button {
                         onCopy()
@@ -255,6 +257,7 @@ struct HistoryRowView: View {
                     .buttonStyle(.borderless)
                     .foregroundStyle(.secondary)
                     .help("Copy query")
+                    .accessibilityLabel("Copy query")
 
                     Button {
                         onDelete()
@@ -265,6 +268,7 @@ struct HistoryRowView: View {
                     .buttonStyle(.borderless)
                     .foregroundStyle(.red)
                     .help("Delete from history")
+                    .accessibilityLabel("Delete from history")
                 }
             }
         }

@@ -12,6 +12,12 @@ final class QueryViewModel {
     var showRawData: Bool = false
     var showingTemplates: Bool = false
 
+    // MARK: - Save Feedback
+
+    var showSaveResult: Bool = false
+    var saveResultSuccess: Bool = false
+    var saveResultMessage: String = ""
+
     // MARK: - Query Input History
 
     private static let maxHistorySize = 50
@@ -202,12 +208,18 @@ final class QueryViewModel {
         savePanel.title = "Export Results"
         savePanel.message = "Choose where to save the query results"
 
-        savePanel.begin { response in
+        savePanel.begin { [weak self] response in
+            guard let self = self else { return }
             if response == .OK, let url = savePanel.url {
                 do {
                     try content.write(to: url, atomically: true, encoding: .utf8)
+                    Task { @MainActor in
+                        self.showSaveSuccess("Saved to \(url.lastPathComponent)")
+                    }
                 } catch {
-                    print("Failed to save file: \(error)")
+                    Task { @MainActor in
+                        self.showSaveError("Failed to save: \(error.localizedDescription)")
+                    }
                 }
             }
         }
@@ -220,13 +232,42 @@ final class QueryViewModel {
         savePanel.title = "Export Results"
         savePanel.message = "Choose where to save the Excel file"
 
-        savePanel.begin { response in
+        savePanel.begin { [weak self] response in
+            guard let self = self else { return }
             if response == .OK, let url = savePanel.url {
                 do {
                     try data.write(to: url)
+                    Task { @MainActor in
+                        self.showSaveSuccess("Saved to \(url.lastPathComponent)")
+                    }
                 } catch {
-                    print("Failed to save XLSX file: \(error)")
+                    Task { @MainActor in
+                        self.showSaveError("Failed to save: \(error.localizedDescription)")
+                    }
                 }
+            }
+        }
+    }
+
+    private func showSaveSuccess(_ message: String) {
+        saveResultSuccess = true
+        saveResultMessage = message
+        showSaveResult = true
+        dismissSaveResultAfterDelay()
+    }
+
+    private func showSaveError(_ message: String) {
+        saveResultSuccess = false
+        saveResultMessage = message
+        showSaveResult = true
+        dismissSaveResultAfterDelay()
+    }
+
+    private func dismissSaveResultAfterDelay() {
+        Task {
+            try? await Task.sleep(for: .seconds(3))
+            withAnimation {
+                showSaveResult = false
             }
         }
     }

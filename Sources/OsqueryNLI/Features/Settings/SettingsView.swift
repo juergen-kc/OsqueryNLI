@@ -171,6 +171,7 @@ struct TableSettingsView: View {
     @State private var availableTables: [String] = []
     @State private var isLoadingTables: Bool = false
     @State private var newTableName: String = ""
+    @State private var tableLoadError: String? = nil
 
     var filteredTables: [String] {
         if searchText.isEmpty {
@@ -238,6 +239,28 @@ struct TableSettingsView: View {
                 ProgressView("Loading tables...")
                 Spacer()
             } else {
+                // Warning if tables couldn't be loaded
+                if let error = tableLoadError {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Text(error)
+                            .font(.caption)
+                        Spacer()
+                        Button("Retry") {
+                            loadTables()
+                        }
+                        .font(.caption)
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                    .padding(10)
+                    .background(Color.orange.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                }
+
                 // Table list
                 List {
                     Section("Enabled Tables") {
@@ -299,11 +322,13 @@ struct TableSettingsView: View {
 
     private func loadTables() {
         isLoadingTables = true
+        tableLoadError = nil
         Task {
             do {
                 availableTables = try await appState.osqueryService.getAllTables()
+                tableLoadError = nil
             } catch {
-                print("Failed to load tables: \(error)")
+                tableLoadError = "Could not load tables from osquery. Using common tables instead."
                 availableTables = Array(OsqueryService.commonTables).sorted()
             }
             isLoadingTables = false

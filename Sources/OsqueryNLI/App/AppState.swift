@@ -71,6 +71,7 @@ final class AppState {
         let result: QueryResult
         let timestamp: Date
         let provider: LLMProvider
+        let model: String
         let tables: Set<String>
     }
 
@@ -105,8 +106,9 @@ final class AppState {
             return nil
         }
 
-        // Check if provider or tables changed
+        // Check if provider, model, or tables changed
         guard entry.provider == selectedProvider,
+              entry.model == selectedModel,
               entry.tables == enabledTables else {
             queryCache.removeValue(forKey: key)
             return nil
@@ -121,6 +123,7 @@ final class AppState {
             result: result,
             timestamp: Date(),
             provider: selectedProvider,
+            model: selectedModel,
             tables: enabledTables
         )
         queryCache[key] = entry

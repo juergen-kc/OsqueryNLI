@@ -88,6 +88,27 @@ struct QueryView: View {
                 .opacity(0)
             }
         )
+        .overlay(alignment: .bottom) {
+            if vm.showSaveResult {
+                saveResultToast(vm)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .padding(.bottom, 20)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: vm.showSaveResult)
+    }
+
+    private func saveResultToast(_ vm: QueryViewModel) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: vm.saveResultSuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
+                .foregroundStyle(vm.saveResultSuccess ? .green : .red)
+            Text(vm.saveResultMessage)
+                .font(.callout)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
     }
 
     // MARK: - Header
@@ -181,6 +202,7 @@ struct QueryView: View {
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
             .help("Browse query templates")
+            .accessibilityLabel("Browse query templates")
 
             TextField("Ask about your system...", text: $bindableVM.queryText, axis: .vertical)
                 .textFieldStyle(.plain)
@@ -216,6 +238,7 @@ struct QueryView: View {
             .foregroundStyle(vm.queryText.isEmpty ? Color.secondary : Color.accentColor)
             .disabled(!vm.canSubmit)
             .help("Submit query (⌘↩)")
+            .accessibilityLabel("Submit query")
         }
         .padding(12)
         .background(.background)
@@ -295,6 +318,7 @@ struct QueryView: View {
     private func stageIndicator(_ vm: QueryViewModel, stage: AppState.QueryStage, current: AppState.QueryStage) -> some View {
         let isActive = current == stage
         let isPast = vm.stageOrder(current) > vm.stageOrder(stage)
+        let status = isActive ? "in progress" : (isPast ? "completed" : "pending")
 
         return HStack(spacing: 4) {
             Circle()
@@ -304,6 +328,8 @@ struct QueryView: View {
                 .font(.caption2)
                 .foregroundStyle(isActive ? Color.primary : Color.secondary)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(vm.stageName(stage)) stage, \(status)")
     }
 
     private func errorView(_ vm: QueryViewModel, error: String) -> some View {
@@ -511,6 +537,7 @@ struct QueryView: View {
                             .buttonStyle(.bordered)
                             .controlSize(.small)
                             .help(vm.showRawData ? "Show table view" : "Show raw JSON")
+                            .accessibilityLabel(vm.showRawData ? "Show table view" : "Show raw JSON")
                         }
 
                         if vm.showRawData {
@@ -564,16 +591,30 @@ struct ResultsTableView: View {
     let result: QueryResult
     let colorScheme: ColorScheme
 
-    // Calculate column widths based on content
+    /// Maximum rows to display in the table view for performance
+    private static let maxDisplayRows = 1000
+
+    /// Whether results are truncated for display
+    private var isTruncated: Bool {
+        result.rows.count > Self.maxDisplayRows
+    }
+
+    /// Rows to display (limited for performance)
+    private var displayRows: ArraySlice<[String: String]> {
+        result.rows.prefix(Self.maxDisplayRows)
+    }
+
+    // Calculate column widths based on content (samples first 100 rows for performance)
     private var columnWidths: [String: CGFloat] {
         var widths: [String: CGFloat] = [:]
+        let sampleRows = result.rows.prefix(100)
 
         for column in result.columns {
             // Start with header width (estimate 8pt per character + padding)
             var maxWidth = CGFloat(column.name.count) * 8 + 24
 
-            // Check all row values
-            for row in result.rows {
+            // Check sampled row values
+            for row in sampleRows {
                 if let value = row[column.name] {
                     let valueWidth = CGFloat(min(value.count, 40)) * 7 + 24
                     maxWidth = max(maxWidth, valueWidth)
@@ -588,55 +629,75 @@ struct ResultsTableView: View {
     }
 
     var body: some View {
-        ScrollView([.horizontal, .vertical], showsIndicators: true) {
-            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
-                Section {
-                    // Data rows
-                    ForEach(Array(result.rows.enumerated()), id: \.offset) { index, row in
+        VStack(spacing: 0) {
+            if isTruncated {
+                truncationWarning
+            }
+
+            ScrollView([.horizontal, .vertical], showsIndicators: true) {
+                LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+                    Section {
+                        // Data rows (limited)
+                        ForEach(Array(displayRows.enumerated()), id: \.offset) { index, row in
+                            HStack(spacing: 0) {
+                                ForEach(result.columns) { column in
+                                    Text(row[column.name] ?? "-")
+                                        .font(.system(.caption, design: .monospaced))
+                                        .textSelection(.enabled)
+                                        .lineLimit(2)
+                                        .truncationMode(.tail)
+                                        .frame(width: columnWidths[column.name] ?? 100, alignment: .leading)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 8)
+                                        .help(row[column.name] ?? "-") // Show full value on hover
+                                }
+                            }
+                            .background(alternatingRowColor(index: index))
+                        }
+                    } header: {
+                        // Sticky header row
                         HStack(spacing: 0) {
                             ForEach(result.columns) { column in
-                                Text(row[column.name] ?? "-")
-                                    .font(.system(.caption, design: .monospaced))
-                                    .textSelection(.enabled)
-                                    .lineLimit(2)
-                                    .truncationMode(.tail)
+                                Text(column.name)
+                                    .font(.system(.caption, weight: .semibold))
+                                    .foregroundStyle(.primary)
                                     .frame(width: columnWidths[column.name] ?? 100, alignment: .leading)
                                     .padding(.horizontal, 10)
-                                    .padding(.vertical, 8)
-                                    .help(row[column.name] ?? "-") // Show full value on hover
+                                    .padding(.vertical, 10)
                             }
                         }
-                        .background(alternatingRowColor(index: index))
-                    }
-                } header: {
-                    // Sticky header row
-                    HStack(spacing: 0) {
-                        ForEach(result.columns) { column in
-                            Text(column.name)
-                                .font(.system(.caption, weight: .semibold))
-                                .foregroundStyle(.primary)
-                                .frame(width: columnWidths[column.name] ?? 100, alignment: .leading)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 10)
+                        .background(
+                            colorScheme == .dark
+                                ? Color(nsColor: .controlBackgroundColor)
+                                : Color(nsColor: .controlBackgroundColor)
+                        )
+                        .overlay(alignment: .bottom) {
+                            Divider()
                         }
-                    }
-                    .background(
-                        colorScheme == .dark
-                            ? Color(nsColor: .controlBackgroundColor)
-                            : Color(nsColor: .controlBackgroundColor)
-                    )
-                    .overlay(alignment: .bottom) {
-                        Divider()
                     }
                 }
             }
+            .background(colorScheme == .dark ? Color(nsColor: .textBackgroundColor) : Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+            )
         }
-        .background(colorScheme == .dark ? Color(nsColor: .textBackgroundColor) : Color.white)
+    }
+
+    private var truncationWarning: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            Text("Showing first \(Self.maxDisplayRows) of \(result.rows.count) rows. Export to view all results.")
+                .font(.caption)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
+        .background(Color.orange.opacity(0.1))
         .clipShape(RoundedRectangle(cornerRadius: 6))
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
-        )
     }
 
     private func alternatingRowColor(index: Int) -> Color {
