@@ -14,7 +14,7 @@ Osquery NLI is a macOS menu bar app that lets you query your system using natura
 - **Query Templates** - Pre-built templates for common queries across system, network, security, and AI categories
 - **Query History** - Track and rerun previous queries
 - **Favorites** - Save frequently used queries for quick access
-- **Export Results** - Export query results to JSON or CSV
+- **Export Results** - Export query results to JSON, CSV, Markdown, or Excel
 - **MCP Server** - Built-in Model Context Protocol server for integration with AI assistants
 - **Menu Bar App** - Lightweight, always-accessible from the menu bar
 
@@ -96,6 +96,15 @@ With the bundled AI Discovery extension, you can query AI-related information:
 - "What AI browser extensions do I have?"
 - "Which AI code assistants are configured?"
 - "Are any local AI servers running?"
+
+### Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `⌘↩` | Submit query |
+| `⌘K` | Clear and start new query |
+| `↑` / `↓` | Navigate query history |
+| `Esc` | Cancel running query / Exit history |
 
 ### Query Templates
 
@@ -364,6 +373,18 @@ pgrep osqueryd
 - **No Telemetry**: The app doesn't collect or send any usage data
 
 ## Version History
+
+### 1.0.4
+- MCP server improvements and bug fixes
+- Query history refresh button
+- Unit tests for history logging
+- Polish: accessibility labels, keyboard hints, animations
+- Better error handling for table loading and file exports
+- Result set truncation for large queries (1000 rows displayed)
+
+### 1.0.3
+- Homebrew formula with auto-update checker
+- UX enhancements: window persistence, input history navigation
 
 ### 1.0.0
 - Initial release
