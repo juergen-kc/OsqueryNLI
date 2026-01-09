@@ -1,5 +1,11 @@
 import Foundation
 
+/// Response from OpenAI API including text and token usage
+private struct OpenAIResponse: Sendable {
+    let text: String
+    let tokenUsage: TokenUsage?
+}
+
 /// LLM service implementation for OpenAI GPT
 /// Note: @unchecked Sendable is safe because mutable `_currentTask` is protected by `lock`
 /// and all other properties are immutable.
@@ -11,9 +17,9 @@ final class OpenAIService: LLMServiceProtocol, @unchecked Sendable {
     private let baseURL = URL(string: "https://api.openai.com/v1/chat/completions")!
     private let timeout: TimeInterval = 30.0
     private let lock = NSLock()
-    private var _currentTask: Task<String, Error>?
+    private var _currentTask: Task<OpenAIResponse, Error>?
 
-    private var currentTask: Task<String, Error>? {
+    private var currentTask: Task<OpenAIResponse, Error>? {
         get { lock.withLock { _currentTask } }
         set { lock.withLock { _currentTask = newValue } }
     }
@@ -40,13 +46,13 @@ final class OpenAIService: LLMServiceProtocol, @unchecked Sendable {
             user: LLMPrompts.translationUserPrompt(query: query, schemaContext: schemaContext)
         )
 
-        let sql = cleanSQLResponse(response)
+        let sql = cleanSQLResponse(response.text)
 
         if sql.uppercased().hasPrefix("ERROR:") {
             throw LLMError.cannotTranslate(reason: sql)
         }
 
-        return TranslationResult(sql: sql)
+        return TranslationResult(sql: sql, tokenUsage: response.tokenUsage)
     }
 
     func summarizeResults(
@@ -69,7 +75,7 @@ final class OpenAIService: LLMServiceProtocol, @unchecked Sendable {
             user: LLMPrompts.summarizationUserPrompt(question: question, sql: sql, jsonResults: jsonString)
         )
 
-        return SummaryResult(answer: response.trimmingCharacters(in: .whitespacesAndNewlines))
+        return SummaryResult(answer: response.text.trimmingCharacters(in: .whitespacesAndNewlines), tokenUsage: response.tokenUsage)
     }
 
     func cancel() {
@@ -79,11 +85,11 @@ final class OpenAIService: LLMServiceProtocol, @unchecked Sendable {
 
     // MARK: - Private API
 
-    private func sendMessage(system: String, user: String) async throws -> String {
+    private func sendMessage(system: String, user: String) async throws -> OpenAIResponse {
         // Cancel any existing task
         currentTask?.cancel()
 
-        let task = Task<String, Error> {
+        let task = Task<OpenAIResponse, Error> {
             var request = URLRequest(url: baseURL)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -141,7 +147,7 @@ final class OpenAIService: LLMServiceProtocol, @unchecked Sendable {
                 throw LLMError.invalidResponse
             }
 
-            return try parseContentResponse(from: data)
+            return try parseResponse(from: data)
         }
 
         currentTask = task
@@ -159,7 +165,7 @@ final class OpenAIService: LLMServiceProtocol, @unchecked Sendable {
         }
     }
 
-    private func parseContentResponse(from data: Data) throws -> String {
+    private func parseResponse(from data: Data) throws -> OpenAIResponse {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let choices = json["choices"] as? [[String: Any]],
               let firstChoice = choices.first,
@@ -168,7 +174,15 @@ final class OpenAIService: LLMServiceProtocol, @unchecked Sendable {
             throw LLMError.invalidResponse
         }
 
-        return content
+        // Parse token usage (OpenAI uses prompt_tokens/completion_tokens)
+        var tokenUsage: TokenUsage?
+        if let usage = json["usage"] as? [String: Any],
+           let promptTokens = usage["prompt_tokens"] as? Int,
+           let completionTokens = usage["completion_tokens"] as? Int {
+            tokenUsage = TokenUsage(inputTokens: promptTokens, outputTokens: completionTokens)
+        }
+
+        return OpenAIResponse(text: content, tokenUsage: tokenUsage)
     }
 
     private func parseErrorMessage(from data: Data) throws -> String? {

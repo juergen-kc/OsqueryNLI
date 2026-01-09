@@ -658,9 +658,27 @@ struct QueryView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
 
-                // Execution time
+                // Execution time and token usage
                 HStack {
                     Spacer()
+
+                    // Token usage
+                    if let tokenUsage = result.tokenUsage {
+                        HStack(spacing: 4) {
+                            Image(systemName: "sparkles")
+                                .font(.caption2)
+                            Text("\(tokenUsage.totalTokens) tokens")
+                                .font(.caption2)
+                            Text("(\(tokenUsage.inputTokens) in / \(tokenUsage.outputTokens) out)")
+                                .font(.caption2)
+                                .foregroundStyle(.quaternary)
+                        }
+                        .foregroundStyle(.tertiary)
+
+                        Text("•")
+                            .foregroundStyle(.quaternary)
+                    }
+
                     Text("Completed in \(String(format: "%.2f", result.executionTime))s")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)

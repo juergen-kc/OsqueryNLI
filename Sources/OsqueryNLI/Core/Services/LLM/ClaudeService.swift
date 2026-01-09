@@ -1,5 +1,11 @@
 import Foundation
 
+/// Response from Claude API including text and token usage
+private struct ClaudeResponse: Sendable {
+    let text: String
+    let tokenUsage: TokenUsage?
+}
+
 /// LLM service implementation for Anthropic Claude
 /// Note: @unchecked Sendable is safe because mutable `_currentTask` is protected by `lock`
 /// and all other properties are immutable.
@@ -11,9 +17,9 @@ final class ClaudeService: LLMServiceProtocol, @unchecked Sendable {
     private let baseURL = URL(string: "https://api.anthropic.com/v1/messages")!
     private let timeout: TimeInterval = 30.0
     private let lock = NSLock()
-    private var _currentTask: Task<String, Error>?
+    private var _currentTask: Task<ClaudeResponse, Error>?
 
-    private var currentTask: Task<String, Error>? {
+    private var currentTask: Task<ClaudeResponse, Error>? {
         get { lock.withLock { _currentTask } }
         set { lock.withLock { _currentTask = newValue } }
     }
@@ -40,13 +46,13 @@ final class ClaudeService: LLMServiceProtocol, @unchecked Sendable {
             user: LLMPrompts.translationUserPrompt(query: query, schemaContext: schemaContext)
         )
 
-        let sql = cleanSQLResponse(response)
+        let sql = cleanSQLResponse(response.text)
 
         if sql.uppercased().hasPrefix("ERROR:") {
             throw LLMError.cannotTranslate(reason: sql)
         }
 
-        return TranslationResult(sql: sql)
+        return TranslationResult(sql: sql, tokenUsage: response.tokenUsage)
     }
 
     func summarizeResults(
@@ -69,7 +75,7 @@ final class ClaudeService: LLMServiceProtocol, @unchecked Sendable {
             user: LLMPrompts.summarizationUserPrompt(question: question, sql: sql, jsonResults: jsonString)
         )
 
-        return SummaryResult(answer: response.trimmingCharacters(in: .whitespacesAndNewlines))
+        return SummaryResult(answer: response.text.trimmingCharacters(in: .whitespacesAndNewlines), tokenUsage: response.tokenUsage)
     }
 
     func cancel() {
@@ -79,11 +85,11 @@ final class ClaudeService: LLMServiceProtocol, @unchecked Sendable {
 
     // MARK: - Private API
 
-    private func sendMessage(system: String, user: String) async throws -> String {
+    private func sendMessage(system: String, user: String) async throws -> ClaudeResponse {
         // Cancel any existing task
         currentTask?.cancel()
 
-        let task = Task<String, Error> {
+        let task = Task<ClaudeResponse, Error> {
             var request = URLRequest(url: baseURL)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -142,7 +148,7 @@ final class ClaudeService: LLMServiceProtocol, @unchecked Sendable {
                 throw LLMError.invalidResponse
             }
 
-            return try parseContentResponse(from: data)
+            return try parseResponse(from: data)
         }
 
         currentTask = task
@@ -160,7 +166,7 @@ final class ClaudeService: LLMServiceProtocol, @unchecked Sendable {
         }
     }
 
-    private func parseContentResponse(from data: Data) throws -> String {
+    private func parseResponse(from data: Data) throws -> ClaudeResponse {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let content = json["content"] as? [[String: Any]],
               let firstBlock = content.first,
@@ -168,7 +174,15 @@ final class ClaudeService: LLMServiceProtocol, @unchecked Sendable {
             throw LLMError.invalidResponse
         }
 
-        return text
+        // Parse token usage
+        var tokenUsage: TokenUsage?
+        if let usage = json["usage"] as? [String: Any],
+           let inputTokens = usage["input_tokens"] as? Int,
+           let outputTokens = usage["output_tokens"] as? Int {
+            tokenUsage = TokenUsage(inputTokens: inputTokens, outputTokens: outputTokens)
+        }
+
+        return ClaudeResponse(text: text, tokenUsage: tokenUsage)
     }
 
     private func parseErrorMessage(from data: Data) throws -> String? {

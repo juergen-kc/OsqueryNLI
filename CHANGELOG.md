@@ -5,6 +5,21 @@ All notable changes to Osquery NLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-01-09
+
+### Added
+- **Schema Browser** (⌘B) - Visual browser for osquery tables and columns
+  - Search and filter tables by name
+  - Toggle "Enabled only" to see active tables
+  - View column names and types for any table
+  - Enable/disable tables directly from browser
+  - Copy schema to clipboard
+  - AI Discovery tables highlighted with purple badge
+- **Token Usage Display** - Shows API token consumption after each query
+  - Total tokens (input + output breakdown)
+  - Displayed next to execution time in results
+  - Works with all providers: Gemini, Claude, and OpenAI
+
 ## [1.0.9] - 2025-01-09
 
 ### Fixed
@@ -133,6 +148,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - osquery integration via osqueryi CLI
 - AI Discovery extension written in Go
 
+[1.1.0]: https://github.com/juergen-kc/OsqueryNLI/compare/v1.0.9...v1.1.0
 [1.0.9]: https://github.com/juergen-kc/OsqueryNLI/compare/v1.0.8...v1.0.9
 [1.0.8]: https://github.com/juergen-kc/OsqueryNLI/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/juergen-kc/OsqueryNLI/compare/v1.0.6...v1.0.7

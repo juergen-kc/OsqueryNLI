@@ -351,13 +351,26 @@ final class AppState {
 
                 let executionTime = Date().timeIntervalSince(startTime)
 
+                // Aggregate token usage from translation and summarization
+                var totalTokenUsage: TokenUsage?
+                if let translationUsage = translation.tokenUsage {
+                    if let summaryUsage = summary.tokenUsage {
+                        totalTokenUsage = translationUsage + summaryUsage
+                    } else {
+                        totalTokenUsage = translationUsage
+                    }
+                } else if let summaryUsage = summary.tokenUsage {
+                    totalTokenUsage = summaryUsage
+                }
+
                 // 5. Create result
                 await MainActor.run {
                     let result = QueryResult.from(
                         sql: translation.sql,
                         osqueryOutput: allResults,
                         executionTime: executionTime,
-                        summary: summary.answer
+                        summary: summary.answer,
+                        tokenUsage: totalTokenUsage
                     )
                     lastResult = result
 

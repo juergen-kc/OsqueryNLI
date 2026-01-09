@@ -28,6 +28,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
     private var settingsWindow: NSWindow?
     private var historyWindow: NSWindow?
     private var shortcutsWindow: NSWindow?
+    private var schemaBrowserWindow: NSWindow?
 
     private var popover: NSPopover?
     private var eventMonitor: Any?
@@ -56,6 +57,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
             historyWindow = nil
         } else if window === shortcutsWindow {
             shortcutsWindow = nil
+        } else if window === schemaBrowserWindow {
+            schemaBrowserWindow = nil
         }
     }
 
@@ -277,6 +280,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
         historyItem.target = self
         menu.addItem(historyItem)
 
+        let schemaItem = NSMenuItem(title: "Schema Browser", action: #selector(openSchemaBrowser), keyEquivalent: "b")
+        schemaItem.target = self
+        menu.addItem(schemaItem)
+
         menu.addItem(NSMenuItem.separator())
 
         // Provider info (disabled item)
@@ -445,6 +452,28 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
         }
 
         shortcutsWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc func openSchemaBrowser() {
+        if schemaBrowserWindow == nil {
+            let contentView = SchemaBrowserView()
+                .environment(appState)
+                .environment(\.fontScale, appState.fontScale)
+
+            schemaBrowserWindow = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 700, height: 500),
+                styleMask: [.titled, .closable, .resizable, .miniaturizable],
+                backing: .buffered,
+                defer: false
+            )
+            schemaBrowserWindow?.title = "Schema Browser"
+            schemaBrowserWindow?.contentView = NSHostingView(rootView: contentView)
+            schemaBrowserWindow?.center()
+            schemaBrowserWindow?.delegate = self
+        }
+
+        schemaBrowserWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 }

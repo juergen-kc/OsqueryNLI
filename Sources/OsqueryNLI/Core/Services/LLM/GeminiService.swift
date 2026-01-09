@@ -49,7 +49,7 @@ final class GeminiService: LLMServiceProtocol, @unchecked Sendable {
         \(LLMPrompts.translationUserPrompt(query: query, schemaContext: schemaContext))
         """
 
-        let text = try await sendRequest(model: model, prompt: prompt)
+        let (text, tokenUsage) = try await sendRequest(model: model, prompt: prompt)
 
         let sql = cleanSQLResponse(text)
 
@@ -57,7 +57,7 @@ final class GeminiService: LLMServiceProtocol, @unchecked Sendable {
             throw LLMError.cannotTranslate(reason: sql)
         }
 
-        return TranslationResult(sql: sql)
+        return TranslationResult(sql: sql, tokenUsage: tokenUsage)
     }
 
     func summarizeResults(
@@ -81,9 +81,9 @@ final class GeminiService: LLMServiceProtocol, @unchecked Sendable {
         \(LLMPrompts.summarizationUserPrompt(question: question, sql: sql, jsonResults: jsonString))
         """
 
-        let text = try await sendRequest(model: model, prompt: prompt)
+        let (text, tokenUsage) = try await sendRequest(model: model, prompt: prompt)
 
-        return SummaryResult(answer: text.trimmingCharacters(in: .whitespacesAndNewlines))
+        return SummaryResult(answer: text.trimmingCharacters(in: .whitespacesAndNewlines), tokenUsage: tokenUsage)
     }
 
     func cancel() {
@@ -93,7 +93,13 @@ final class GeminiService: LLMServiceProtocol, @unchecked Sendable {
 
     // MARK: - Private Helpers
 
-    private func sendRequest(model: GenerativeModel, prompt: String) async throws -> String {
+    /// Response from Gemini including text and token usage
+    private struct GeminiResponse: Sendable {
+        let text: String
+        let tokenUsage: TokenUsage?
+    }
+
+    private func sendRequest(model: GenerativeModel, prompt: String) async throws -> (String, TokenUsage?) {
         // Cancel any existing task
         currentTask?.cancel()
 
@@ -104,7 +110,7 @@ final class GeminiService: LLMServiceProtocol, @unchecked Sendable {
         nonisolated(unsafe) let unsafeModel = model
         let promptCopy = prompt
 
-        let task = Task<String, Error> {
+        let task = Task<GeminiResponse, Error> {
             do {
                 let response = try await unsafeModel.generateContent(promptCopy)
 
@@ -112,7 +118,16 @@ final class GeminiService: LLMServiceProtocol, @unchecked Sendable {
                     throw LLMError.invalidResponse
                 }
 
-                return text
+                // Extract token usage from usage metadata
+                var tokenUsage: TokenUsage?
+                if let usage = response.usageMetadata {
+                    tokenUsage = TokenUsage(
+                        inputTokens: usage.promptTokenCount,
+                        outputTokens: usage.candidatesTokenCount
+                    )
+                }
+
+                return GeminiResponse(text: text, tokenUsage: tokenUsage)
             } catch is CancellationError {
                 throw LLMError.cancelled
             } catch let error as GenerateContentError {
@@ -129,7 +144,12 @@ final class GeminiService: LLMServiceProtocol, @unchecked Sendable {
             }
         }
 
-        currentTask = task
+        // Store task for cancellation (we need to convert the type)
+        let stringTask = Task<String, Error> {
+            let result = try await task.value
+            return result.text
+        }
+        currentTask = stringTask
 
         // Set up timeout cancellation
         Task {
@@ -142,7 +162,7 @@ final class GeminiService: LLMServiceProtocol, @unchecked Sendable {
         do {
             let result = try await task.value
             currentTask = nil
-            return result
+            return (result.text, result.tokenUsage)
         } catch is CancellationError {
             currentTask = nil
             throw LLMError.timeout

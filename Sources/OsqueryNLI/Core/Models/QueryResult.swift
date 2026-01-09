@@ -9,6 +9,7 @@ struct QueryResult: Identifiable, Sendable {
     let executionTime: TimeInterval
     let summary: String?
     let timestamp: Date
+    let tokenUsage: TokenUsage?
 
     var isEmpty: Bool { rows.isEmpty }
     var rowCount: Int { rows.count }
@@ -39,7 +40,8 @@ struct QueryResult: Identifiable, Sendable {
         columns: [ColumnInfo]? = nil,
         executionTime: TimeInterval = 0,
         summary: String? = nil,
-        timestamp: Date = Date()
+        timestamp: Date = Date(),
+        tokenUsage: TokenUsage? = nil
     ) {
         self.id = id
         self.sql = sql
@@ -47,6 +49,7 @@ struct QueryResult: Identifiable, Sendable {
         self.executionTime = executionTime
         self.summary = summary
         self.timestamp = timestamp
+        self.tokenUsage = tokenUsage
 
         // Infer columns from first row if not provided
         if let columns {
@@ -189,7 +192,8 @@ extension QueryResult {
         sql: String,
         osqueryOutput: [[String: Any]],
         executionTime: TimeInterval = 0,
-        summary: String? = nil
+        summary: String? = nil,
+        tokenUsage: TokenUsage? = nil
     ) -> QueryResult {
         // Convert Any values to String
         let stringRows: [[String: String]] = osqueryOutput.map { row in
@@ -204,7 +208,8 @@ extension QueryResult {
             sql: sql,
             rows: stringRows,
             executionTime: executionTime,
-            summary: summary
+            summary: summary,
+            tokenUsage: tokenUsage
         )
     }
 }
