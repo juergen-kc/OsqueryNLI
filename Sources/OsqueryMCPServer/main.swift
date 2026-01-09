@@ -1,6 +1,7 @@
 import Foundation
 import MCP
 import OsqueryNLICore
+import GoogleGenerativeAI
 
 // MARK: - Ensure stdout is unbuffered for MCP communication
 private func setupUnbufferedOutput() {
@@ -16,6 +17,244 @@ private func debugLog(_ message: String) {
     fputs("[\(timestamp)] \(message)\n", stderr)
     fflush(stderr)
 }
+
+// MARK: - LLM Translation Service
+
+/// Result of natural language query translation and execution
+struct NLQueryResult: Sendable {
+    let sql: String
+    let results: [[String: String]]
+    let summary: String?
+}
+
+/// Handles natural language to SQL translation using Gemini
+private final class LLMTranslator: @unchecked Sendable {
+    private let model: GenerativeModel?
+    private let osquery: OsqueryService
+    private let isConfigured: Bool
+
+    init() {
+        self.osquery = OsqueryService()
+
+        // Try to get API key from environment or keychain
+        let apiKey = Self.getAPIKey()
+
+        if let apiKey = apiKey, !apiKey.isEmpty {
+            self.model = GenerativeModel(
+                name: "gemini-2.0-flash-lite",
+                apiKey: apiKey,
+                generationConfig: GenerationConfig(
+                    temperature: 0.1,
+                    maxOutputTokens: 1024
+                )
+            )
+            self.isConfigured = true
+            debugLog("LLM Translator initialized with Gemini")
+        } else {
+            self.model = nil
+            self.isConfigured = false
+            debugLog("LLM Translator not available - no API key found")
+        }
+    }
+
+    var isAvailable: Bool {
+        isConfigured
+    }
+
+    private static func getAPIKey() -> String? {
+        // 1. Check environment variable
+        if let envKey = ProcessInfo.processInfo.environment["GEMINI_API_KEY"], !envKey.isEmpty {
+            debugLog("Using GEMINI_API_KEY from environment")
+            return envKey
+        }
+
+        // 2. Try to read from macOS Keychain (same format as main app)
+        if let keychainKey = readFromKeychain(service: "com.klaassen.OsqueryNLI", account: "gemini") {
+            debugLog("Using API key from Keychain")
+            return keychainKey
+        }
+
+        debugLog("No API key found in environment or keychain")
+        return nil
+    }
+
+    private static func readFromKeychain(service: String, account: String) -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        guard status == errSecSuccess,
+              let data = result as? Data,
+              let key = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+
+        return key
+    }
+
+    func translateAndExecute(question: String, summarize: Bool) async throws -> NLQueryResult {
+        guard let model = model else {
+            throw NSError(domain: "LLMTranslator", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "LLM not available. Set GEMINI_API_KEY environment variable or configure API key in OsqueryNLI app."
+            ])
+        }
+
+        // Get schema context for available tables
+        let tables = try await osquery.getAllTables()
+        let schemaContext = try await osquery.getSchema(for: Array(tables.prefix(50)))
+
+        // Translate to SQL
+        let translationPrompt = """
+        You are an expert in osquery SQL.
+        Translate the following natural language query into valid osquery SQL.
+
+        Rules:
+        1. Return ONLY the SQL query. No markdown, no explanations, no code fences.
+        2. Only use tables and columns from the schema below.
+        3. Use LIMIT for potentially large result sets.
+        4. If you cannot answer with available tables, return: ERROR: Cannot answer with available tables.
+
+        Schema:
+        \(schemaContext)
+
+        Question: \(question)
+        """
+
+        debugLog("Translating: \(question)")
+        let translationResponse = try await model.generateContent(translationPrompt)
+
+        guard let sqlText = translationResponse.text?.trimmingCharacters(in: .whitespacesAndNewlines) else {
+            throw NSError(domain: "LLMTranslator", code: 2, userInfo: [
+                NSLocalizedDescriptionKey: "Failed to generate SQL translation"
+            ])
+        }
+
+        // Check for error response
+        if sqlText.hasPrefix("ERROR:") {
+            throw NSError(domain: "LLMTranslator", code: 3, userInfo: [
+                NSLocalizedDescriptionKey: sqlText
+            ])
+        }
+
+        debugLog("Generated SQL: \(sqlText)")
+
+        // Execute the query
+        let rawResults = try await osquery.execute(sqlText)
+        debugLog("Query returned \(rawResults.count) rows")
+
+        // Convert to Sendable format (stringify all values)
+        let results: [[String: String]] = rawResults.map { row in
+            row.mapValues { value in
+                if let str = value as? String {
+                    return str
+                } else {
+                    return String(describing: value)
+                }
+            }
+        }
+
+        // Optionally summarize results
+        var summary: String? = nil
+        if summarize && !results.isEmpty {
+            let jsonData = try JSONSerialization.data(withJSONObject: results, options: [.sortedKeys])
+            let jsonString = String(data: jsonData, encoding: .utf8) ?? "[]"
+
+            let summaryPrompt = """
+            The user asked: "\(question)"
+
+            SQL executed: \(sqlText)
+
+            Results (JSON):
+            \(jsonString.prefix(4000))
+
+            Provide a concise, natural language answer (2-3 sentences) to the user's question based on these results.
+            """
+
+            if let summaryResponse = try? await model.generateContent(summaryPrompt),
+               let summaryText = summaryResponse.text {
+                summary = summaryText.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+
+        return NLQueryResult(sql: sqlText, results: results, summary: summary)
+    }
+}
+
+private let sharedTranslator = LLMTranslator()
+
+// MARK: - Example Queries for Tables
+
+private let tableExamples: [String: [(description: String, sql: String)]] = [
+    "processes": [
+        ("Top 10 processes by CPU", "SELECT name, pid, cpu_percent FROM processes ORDER BY cpu_percent DESC LIMIT 10"),
+        ("Top 10 processes by memory", "SELECT name, pid, resident_size/1024/1024 AS memory_mb FROM processes ORDER BY resident_size DESC LIMIT 10"),
+        ("Find process by name", "SELECT * FROM processes WHERE name LIKE '%Safari%'"),
+        ("Processes with open network connections", "SELECT DISTINCT p.name, p.pid FROM processes p JOIN process_open_sockets s ON p.pid = s.pid")
+    ],
+    "listening_ports": [
+        ("All listening ports", "SELECT port, protocol, address, pid FROM listening_ports"),
+        ("Listening ports with process info", "SELECT l.port, l.protocol, p.name, p.pid FROM listening_ports l JOIN processes p ON l.pid = p.pid"),
+        ("Find specific port", "SELECT * FROM listening_ports WHERE port = 8080")
+    ],
+    "users": [
+        ("All users", "SELECT username, uid, gid, directory, shell FROM users"),
+        ("Admin users", "SELECT u.username FROM users u JOIN user_groups ug ON u.uid = ug.uid WHERE ug.gid = 80"),
+        ("Users with login shells", "SELECT username, shell FROM users WHERE shell NOT LIKE '%nologin%' AND shell NOT LIKE '%false%'")
+    ],
+    "apps": [
+        ("All installed apps", "SELECT name, bundle_version, last_opened_time FROM apps ORDER BY name"),
+        ("Recently installed apps", "SELECT name, bundle_version FROM apps ORDER BY last_opened_time DESC LIMIT 20"),
+        ("Find app by name", "SELECT * FROM apps WHERE name LIKE '%Chrome%'")
+    ],
+    "homebrew_packages": [
+        ("All Homebrew packages", "SELECT name, version FROM homebrew_packages ORDER BY name"),
+        ("Find package", "SELECT * FROM homebrew_packages WHERE name LIKE '%node%'")
+    ],
+    "system_info": [
+        ("Basic system info", "SELECT hostname, computer_name, cpu_brand, physical_memory/1024/1024/1024 AS ram_gb FROM system_info"),
+        ("Hardware overview", "SELECT * FROM system_info")
+    ],
+    "os_version": [
+        ("macOS version", "SELECT name, version, build, platform FROM os_version")
+    ],
+    "uptime": [
+        ("System uptime", "SELECT days, hours, minutes FROM uptime")
+    ],
+    "interface_addresses": [
+        ("Network interfaces", "SELECT interface, address, type FROM interface_addresses WHERE address != ''"),
+        ("IPv4 addresses only", "SELECT interface, address FROM interface_addresses WHERE type = 'ipv4' AND address NOT LIKE '127%'")
+    ],
+    "disk_encryption": [
+        ("FileVault status", "SELECT name, encrypted, type FROM disk_encryption")
+    ],
+    "sip_config": [
+        ("SIP status", "SELECT config_flag, enabled FROM sip_config")
+    ],
+    "launchd": [
+        ("All launch agents/daemons", "SELECT name, path, program, run_at_load FROM launchd"),
+        ("Enabled startup items", "SELECT name, path FROM launchd WHERE run_at_load = 1")
+    ],
+    "ai_tools_installed": [
+        ("All AI tools", "SELECT name, category, path, running FROM ai_tools_installed"),
+        ("Running AI tools", "SELECT name, category FROM ai_tools_installed WHERE running = 1")
+    ],
+    "ai_mcp_servers": [
+        ("MCP server configs", "SELECT name, server_type, source_app FROM ai_mcp_servers")
+    ],
+    "ai_local_servers": [
+        ("Local AI servers", "SELECT name, status, port, model_loaded FROM ai_local_servers")
+    ],
+    "ai_models_downloaded": [
+        ("Downloaded models", "SELECT name, provider, size_human FROM ai_models_downloaded")
+    ]
+]
 
 // MARK: - Table Categories for Smart Suggestions
 
@@ -229,7 +468,7 @@ struct OsqueryMCPServer {
 
         let server = Server(
             name: "osquery",
-            version: "1.1.0"
+            version: "1.3.0"
         )
 
         // MARK: - Register Tools
@@ -312,6 +551,56 @@ struct OsqueryMCPServer {
                             ]
                         ],
                         "required": ["sql"]
+                    ]
+                ),
+                Tool(
+                    name: "osquery_ask",
+                    description: "Ask a question about the system in natural language. Automatically translates to SQL, executes, and optionally summarizes results. Requires GEMINI_API_KEY environment variable or API key configured in OsqueryNLI app.",
+                    inputSchema: [
+                        "type": "object",
+                        "properties": [
+                            "question": [
+                                "type": "string",
+                                "description": "Natural language question about the system (e.g., 'What is the system uptime?', 'Show running processes using most memory')"
+                            ],
+                            "summarize": [
+                                "type": "boolean",
+                                "description": "Whether to include a natural language summary of the results (default: true)"
+                            ]
+                        ],
+                        "required": ["question"]
+                    ]
+                ),
+                Tool(
+                    name: "osquery_history",
+                    description: "Get recent query history from OsqueryNLI. Shows queries executed from both the app and MCP server.",
+                    inputSchema: [
+                        "type": "object",
+                        "properties": [
+                            "limit": [
+                                "type": "integer",
+                                "description": "Maximum number of entries to return (default: 20, max: 100)"
+                            ],
+                            "source": [
+                                "type": "string",
+                                "enum": ["app", "mcp", "all"],
+                                "description": "Filter by query source: 'app' (GUI), 'mcp' (this server), or 'all' (default)"
+                            ]
+                        ]
+                    ]
+                ),
+                Tool(
+                    name: "osquery_examples",
+                    description: "Get example queries for specific osquery tables. Useful for learning how to query a table effectively.",
+                    inputSchema: [
+                        "type": "object",
+                        "properties": [
+                            "table": [
+                                "type": "string",
+                                "description": "Table name to get examples for (e.g., 'processes', 'users', 'apps')"
+                            ]
+                        ],
+                        "required": ["table"]
                     ]
                 )
             ])
@@ -626,6 +915,128 @@ struct OsqueryMCPServer {
                     return CallTool.Result(content: [.text("Query plan:\n\n\(jsonString)")])
                 } catch {
                     return CallTool.Result(content: [.text("Error: \(error.localizedDescription)")], isError: true)
+                }
+
+            case "osquery_ask":
+                guard let question = params.arguments?["question"]?.stringValue else {
+                    return CallTool.Result(content: [.text("Error: Missing 'question' parameter")], isError: true)
+                }
+
+                let summarize = params.arguments?["summarize"]?.boolValue ?? true
+
+                // Check if LLM is available
+                guard sharedTranslator.isAvailable else {
+                    return CallTool.Result(content: [.text("""
+                        Error: Natural language queries require an API key.
+
+                        Options:
+                        1. Set GEMINI_API_KEY environment variable in your MCP client config
+                        2. Configure a Gemini API key in the OsqueryNLI app (Settings → Provider)
+
+                        Get a free API key at: https://makersuite.google.com/app/apikey
+                        """)], isError: true)
+                }
+
+                debugLog("Processing natural language query: \(question)")
+                let startTime = Date()
+
+                do {
+                    let result = try await sharedTranslator.translateAndExecute(question: question, summarize: summarize)
+                    let elapsed = Date().timeIntervalSince(startTime)
+
+                    var response = ""
+
+                    // Add summary if available
+                    if let summary = result.summary {
+                        response += "**Answer:** \(summary)\n\n"
+                    }
+
+                    // Add SQL used
+                    response += "**SQL:** `\(result.sql)`\n\n"
+
+                    // Add results
+                    response += "**Results:** \(result.results.count) row(s) in \(String(format: "%.2f", elapsed))s\n\n"
+
+                    if !result.results.isEmpty {
+                        let jsonData = try JSONSerialization.data(withJSONObject: result.results, options: [.prettyPrinted, .sortedKeys])
+                        let jsonString = String(data: jsonData, encoding: .utf8) ?? "[]"
+                        response += "```json\n\(jsonString)\n```"
+                    }
+
+                    // Log to shared history
+                    QueryHistoryLogger.shared.logQuery(
+                        query: question,
+                        source: .mcp,
+                        rowCount: result.results.count
+                    )
+
+                    return CallTool.Result(content: [.text(response)])
+                } catch {
+                    debugLog("Natural language query failed: \(error.localizedDescription)")
+                    return CallTool.Result(content: [.text("Error: \(error.localizedDescription)")], isError: true)
+                }
+
+            case "osquery_history":
+                let limit = min(params.arguments?["limit"]?.intValue ?? 20, 100)
+                let sourceFilter = params.arguments?["source"]?.stringValue ?? "all"
+
+                let entries: [QueryHistoryEntry]
+                switch sourceFilter {
+                case "app":
+                    entries = Array(QueryHistoryLogger.shared.readEntries(source: .app).prefix(limit))
+                case "mcp":
+                    entries = Array(QueryHistoryLogger.shared.readEntries(source: .mcp).prefix(limit))
+                default:
+                    entries = Array(QueryHistoryLogger.shared.readEntries().prefix(limit))
+                }
+
+                if entries.isEmpty {
+                    return CallTool.Result(content: [.text("No query history found.")])
+                }
+
+                let dateFormatter = ISO8601DateFormatter()
+                var response = "**Query History** (\(entries.count) entries)\n\n"
+
+                for (index, entry) in entries.enumerated() {
+                    let timestamp = dateFormatter.string(from: entry.timestamp)
+                    let rowInfo = entry.rowCount.map { " → \($0) rows" } ?? ""
+                    response += "\(index + 1). [\(entry.source.rawValue)] \(timestamp)\(rowInfo)\n"
+                    response += "   ```sql\n   \(entry.query)\n   ```\n\n"
+                }
+
+                return CallTool.Result(content: [.text(response)])
+
+            case "osquery_examples":
+                guard let tableName = params.arguments?["table"]?.stringValue else {
+                    return CallTool.Result(content: [.text("Error: Missing 'table' parameter")], isError: true)
+                }
+
+                let lowercased = tableName.lowercased()
+
+                if let examples = tableExamples[lowercased] {
+                    var response = "**Example queries for `\(lowercased)`:**\n\n"
+
+                    for (index, example) in examples.enumerated() {
+                        response += "\(index + 1). **\(example.description)**\n"
+                        response += "```sql\n\(example.sql)\n```\n\n"
+                    }
+
+                    response += "Use `osquery_execute` to run any of these queries."
+                    return CallTool.Result(content: [.text(response)])
+                } else {
+                    // No specific examples, provide generic help
+                    var response = "No specific examples for `\(lowercased)`. "
+
+                    // Suggest getting schema
+                    response += "Try these:\n\n"
+                    response += "1. **Get schema**: Use `osquery_schema` with tables: [\"\(lowercased)\"]\n"
+                    response += "2. **Basic query**: `SELECT * FROM \(lowercased) LIMIT 10`\n"
+
+                    // List available example tables
+                    let availableTables = tableExamples.keys.sorted()
+                    response += "\n**Tables with examples:** \(availableTables.joined(separator: ", "))"
+
+                    return CallTool.Result(content: [.text(response)])
                 }
 
             default:

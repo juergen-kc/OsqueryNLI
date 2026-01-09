@@ -46,6 +46,7 @@ let package = Package(
             dependencies: [
                 "OsqueryNLICore",
                 .product(name: "MCP", package: "swift-sdk"),
+                .product(name: "GoogleGenerativeAI", package: "generative-ai-swift"),
             ],
             path: "Sources/OsqueryMCPServer"
         ),

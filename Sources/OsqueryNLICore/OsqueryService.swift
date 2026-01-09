@@ -334,7 +334,8 @@ public final class OsqueryService: OsqueryServiceProtocol, @unchecked Sendable {
     }
 
     /// Extract table name from CREATE TABLE statement
-    private func extractTableName(from createStatement: String) -> String {
+    /// Note: Internal for testing
+    func extractTableName(from createStatement: String) -> String {
         // Format: CREATE TABLE tablename(...) or CREATE VIRTUAL TABLE tablename USING...
         let pattern = "CREATE (?:VIRTUAL )?TABLE ([a-zA-Z_][a-zA-Z0-9_]*)"
         if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
@@ -397,7 +398,8 @@ public final class OsqueryService: OsqueryServiceProtocol, @unchecked Sendable {
     /// - Shell escape attempts
     /// - Excessively long queries
     /// - Suspicious patterns
-    private func validateSQL(_ sql: String) throws {
+    /// Note: Internal for testing
+    func validateSQL(_ sql: String) throws {
         let trimmed = sql.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Check for empty query
