@@ -320,19 +320,42 @@ struct SchemaBrowserView: View {
         // Parse CREATE TABLE format to extract columns
         var columns: [ColumnInfoItem] = []
 
-        // Match column definitions like "name TEXT," or "size_bytes BIGINT"
-        let pattern = #"^\s*(\w+)\s+(TEXT|INTEGER|BIGINT|REAL|BLOB|DOUBLE|UNSIGNED BIGINT|DATETIME)"#
+        // osquery schema format: CREATE TABLE name(`col1` TYPE, `col2` TYPE, ...);
+        // Also handle multi-line format: col_name TYPE,
 
-        for line in schema.components(separatedBy: "\n") {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
+        // Pattern for backtick-quoted columns (osquery native format)
+        // Matches: `column_name` TYPE
+        let backtickPattern = #"`(\w+)`\s+(TEXT|INTEGER|BIGINT|REAL|BLOB|DOUBLE|UNSIGNED BIGINT|DATETIME)"#
 
-            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
-               let match = regex.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) {
-                if let nameRange = Range(match.range(at: 1), in: trimmed),
-                   let typeRange = Range(match.range(at: 2), in: trimmed) {
-                    let name = String(trimmed[nameRange])
-                    let type = String(trimmed[typeRange]).uppercased()
+        if let regex = try? NSRegularExpression(pattern: backtickPattern, options: .caseInsensitive) {
+            let range = NSRange(schema.startIndex..., in: schema)
+            let matches = regex.matches(in: schema, options: [], range: range)
+
+            for match in matches {
+                if let nameRange = Range(match.range(at: 1), in: schema),
+                   let typeRange = Range(match.range(at: 2), in: schema) {
+                    let name = String(schema[nameRange])
+                    let type = String(schema[typeRange]).uppercased()
                     columns.append(ColumnInfoItem(name: name, type: type))
+                }
+            }
+        }
+
+        // If no backtick matches found, try multi-line format (for AI tables)
+        if columns.isEmpty {
+            let multilinePattern = #"^\s*(\w+)\s+(TEXT|INTEGER|BIGINT|REAL|BLOB|DOUBLE|UNSIGNED BIGINT|DATETIME)"#
+
+            for line in schema.components(separatedBy: "\n") {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+
+                if let regex = try? NSRegularExpression(pattern: multilinePattern, options: .caseInsensitive),
+                   let match = regex.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) {
+                    if let nameRange = Range(match.range(at: 1), in: trimmed),
+                       let typeRange = Range(match.range(at: 2), in: trimmed) {
+                        let name = String(trimmed[nameRange])
+                        let type = String(trimmed[typeRange]).uppercased()
+                        columns.append(ColumnInfoItem(name: name, type: type))
+                    }
                 }
             }
         }
