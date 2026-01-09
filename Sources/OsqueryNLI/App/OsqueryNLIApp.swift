@@ -27,6 +27,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
     private var queryWindow: NSWindow?
     private var settingsWindow: NSWindow?
     private var historyWindow: NSWindow?
+    private var shortcutsWindow: NSWindow?
 
     private var popover: NSPopover?
     private var eventMonitor: Any?
@@ -53,6 +54,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
             settingsWindow = nil
         } else if window === historyWindow {
             historyWindow = nil
+        } else if window === shortcutsWindow {
+            shortcutsWindow = nil
         }
     }
 
@@ -174,11 +177,77 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "terminal.fill", accessibilityDescription: "Osquery NLI")
+            updateMenuBarIcon(isQuerying: false)
             button.action = #selector(handleStatusItemClick(_:))
             button.target = self
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
+
+        // Observe query state changes
+        setupQueryStateObserver()
+    }
+
+    private var queryStateObserver: NSObjectProtocol?
+
+    private func setupQueryStateObserver() {
+        // Use a timer to poll the query state (simpler than manual observation)
+        Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            Task { @MainActor in
+                self.updateMenuBarIcon(isQuerying: self.appState.isQuerying)
+            }
+        }
+    }
+
+    private var lastQueryingState = false
+
+    private func updateMenuBarIcon(isQuerying: Bool) {
+        guard let button = statusItem?.button else { return }
+
+        // Only update if state changed
+        guard isQuerying != lastQueryingState else { return }
+        lastQueryingState = isQuerying
+
+        if isQuerying {
+            // Animated querying state
+            let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
+                .applying(.init(paletteColors: [.systemBlue]))
+            button.image = NSImage(systemSymbolName: "terminal.fill", accessibilityDescription: "Osquery NLI - Querying")?
+                .withSymbolConfiguration(config)
+            button.toolTip = "Query in progress..."
+
+            // Add a subtle animation effect by toggling appearance
+            startMenuBarAnimation()
+        } else {
+            // Normal state
+            stopMenuBarAnimation()
+            button.image = NSImage(systemSymbolName: "terminal.fill", accessibilityDescription: "Osquery NLI")
+            button.toolTip = "Osquery NLI - Click to query"
+        }
+    }
+
+    private var menuBarAnimationTimer: Timer?
+
+    private var animationToggle = false
+
+    private func startMenuBarAnimation() {
+        menuBarAnimationTimer?.invalidate()
+        animationToggle = false
+        menuBarAnimationTimer = Timer.scheduledTimer(withTimeInterval: 0.6, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self = self, let button = self.statusItem?.button else { return }
+                self.animationToggle.toggle()
+                let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
+                    .applying(.init(paletteColors: [self.animationToggle ? .systemBlue : .systemCyan]))
+                button.image = NSImage(systemSymbolName: "terminal.fill", accessibilityDescription: "Querying")?
+                    .withSymbolConfiguration(config)
+            }
+        }
+    }
+
+    private func stopMenuBarAnimation() {
+        menuBarAnimationTimer?.invalidate()
+        menuBarAnimationTimer = nil
     }
 
     @objc private func handleStatusItemClick(_ sender: NSStatusBarButton) {
@@ -218,6 +287,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
         let settingsItem = NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
+
+        let shortcutsItem = NSMenuItem(title: "Keyboard Shortcuts", action: #selector(openKeyboardShortcuts), keyEquivalent: "/")
+        shortcutsItem.keyEquivalentModifierMask = [.command, .shift]
+        shortcutsItem.target = self
+        menu.addItem(shortcutsItem)
 
         let updateItem = NSMenuItem(title: "Check for Updates...", action: #selector(checkForUpdates), keyEquivalent: "")
         updateItem.target = self
@@ -349,6 +423,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
         }
 
         historyWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc func openKeyboardShortcuts() {
+        if shortcutsWindow == nil {
+            let contentView = KeyboardShortcutsView()
+
+            shortcutsWindow = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 400, height: 500),
+                styleMask: [.titled, .closable],
+                backing: .buffered,
+                defer: false
+            )
+            shortcutsWindow?.title = "Keyboard Shortcuts"
+            shortcutsWindow?.contentView = NSHostingView(rootView: contentView)
+            shortcutsWindow?.center()
+            shortcutsWindow?.delegate = self
+        }
+
+        shortcutsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 }

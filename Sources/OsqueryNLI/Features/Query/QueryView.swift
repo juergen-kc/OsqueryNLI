@@ -7,6 +7,7 @@ struct QueryView: View {
     @State private var viewModel: QueryViewModel?
     @FocusState private var isInputFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
+    @State private var showingKeyboardShortcuts = false
 
     var body: some View {
         Group {
@@ -88,8 +89,16 @@ struct QueryView: View {
                 }
                 .keyboardShortcut(.escape, modifiers: [])
                 .opacity(0)
+
+                // Cmd+? to show keyboard shortcuts
+                Button("") { showingKeyboardShortcuts = true }
+                    .keyboardShortcut("/", modifiers: [.command, .shift])
+                    .opacity(0)
             }
         )
+        .sheet(isPresented: $showingKeyboardShortcuts) {
+            KeyboardShortcutsView()
+        }
         .overlay(alignment: .bottom) {
             if vm.showSaveResult {
                 saveResultToast(vm)
@@ -235,16 +244,38 @@ struct QueryView: View {
                     .lineLimit(1...3)
                     .focused($isInputFocused)
                     .onSubmit {
-                        vm.submitQuery()
+                        if vm.showAutoComplete {
+                            vm.selectCurrentSuggestion()
+                        } else {
+                            vm.submitQuery()
+                        }
                     }
                     .disabled(vm.isQuerying)
                     .onKeyPress(.upArrow) {
-                        vm.navigateHistoryUp()
+                        if vm.showAutoComplete {
+                            vm.navigateSuggestionUp()
+                        } else {
+                            vm.navigateHistoryUp()
+                        }
                         return .handled
                     }
                     .onKeyPress(.downArrow) {
-                        vm.navigateHistoryDown()
+                        if vm.showAutoComplete {
+                            vm.navigateSuggestionDown()
+                        } else {
+                            vm.navigateHistoryDown()
+                        }
                         return .handled
+                    }
+                    .onKeyPress(.escape) {
+                        if vm.showAutoComplete {
+                            vm.dismissAutoComplete()
+                            return .handled
+                        }
+                        return .ignored
+                    }
+                    .onChange(of: vm.queryText) { _, _ in
+                        vm.updateAutoComplete()
                     }
 
                 Button {
@@ -272,6 +303,21 @@ struct QueryView: View {
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(.quaternary, lineWidth: 1)
             )
+            .overlay(alignment: .topLeading) {
+                // Auto-complete dropdown
+                if vm.showAutoComplete {
+                    AutoCompleteDropdown(
+                        suggestions: vm.autoCompleteSuggestions,
+                        selectedIndex: vm.selectedSuggestionIndex,
+                        onSelect: { suggestion in
+                            vm.selectSuggestion(suggestion)
+                        }
+                    )
+                    .offset(y: 50)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+            .animation(.easeOut(duration: 0.15), value: vm.showAutoComplete)
 
             // Input hint
             if vm.isBrowsingHistory {
@@ -317,34 +363,33 @@ struct QueryView: View {
     }
 
     private func loadingView(_ vm: QueryViewModel) -> some View {
-        VStack(spacing: 16) {
-            ProgressView()
-                .scaleEffect(1.2)
+        VStack(spacing: 20) {
+            // Animated stage icon
+            AnimatedStageIcon(stage: vm.queryStage)
+                .frame(width: 60, height: 60)
 
             // Show current stage
             Text(vm.queryStage.rawValue.isEmpty ? "Processing query..." : vm.queryStage.rawValue)
+                .font(.headline)
                 .foregroundStyle(.secondary)
-                .animation(.easeInOut, value: vm.queryStage)
 
             // Show stage indicator
-            HStack(spacing: 8) {
+            HStack(spacing: 12) {
                 stageIndicator(vm, stage: .translating, current: vm.queryStage)
-                Image(systemName: "chevron.right")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                StageConnector(isActive: vm.stageOrder(vm.queryStage) >= vm.stageOrder(.executing))
                 stageIndicator(vm, stage: .executing, current: vm.queryStage)
-                Image(systemName: "chevron.right")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                StageConnector(isActive: vm.stageOrder(vm.queryStage) >= vm.stageOrder(.summarizing))
                 stageIndicator(vm, stage: .summarizing, current: vm.queryStage)
             }
-            .padding(.top, 8)
+            .padding(.top, 4)
 
             if !vm.currentQuery.isEmpty {
                 Text("\"\(vm.currentQuery)\"")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                     .lineLimit(2)
+                    .padding(.horizontal, 40)
+                    .multilineTextAlignment(.center)
                     .padding(.top, 4)
             }
 
@@ -352,12 +397,12 @@ struct QueryView: View {
             Button {
                 vm.cancelQuery()
             } label: {
-                Label("Cancel (Esc)", systemImage: "xmark.circle")
+                Label("Cancel", systemImage: "xmark.circle")
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
-            .padding(.top, 8)
-            .help("Cancel query (Esc)")
+            .keyboardShortcut(.escape, modifiers: [])
+            .padding(.top, 12)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -468,7 +513,7 @@ struct QueryView: View {
                 shortcutHint("⌘↩", "Submit")
                 shortcutHint("⌘K", "Clear")
                 shortcutHint("↑↓", "History")
-                shortcutHint("Esc", "Cancel")
+                shortcutHint("⌘?", "Help")
             }
             .padding(.top, 8)
         }
@@ -881,5 +926,141 @@ private struct shortcutHint: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+// MARK: - Auto-Complete Dropdown
+
+private struct AutoCompleteDropdown: View {
+    let suggestions: [QueryViewModel.Suggestion]
+    let selectedIndex: Int
+    let onSelect: (QueryViewModel.Suggestion) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(suggestions.enumerated()), id: \.element.id) { index, suggestion in
+                AutoCompleteSuggestionRow(
+                    suggestion: suggestion,
+                    isSelected: index == selectedIndex,
+                    onSelect: { onSelect(suggestion) }
+                )
+            }
+        }
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(.quaternary, lineWidth: 1)
+        )
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct AutoCompleteSuggestionRow: View {
+    let suggestion: QueryViewModel.Suggestion
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 10) {
+                Image(systemName: suggestion.type.icon)
+                    .font(.caption)
+                    .foregroundStyle(iconColor)
+                    .frame(width: 16)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(suggestion.displayText)
+                        .font(.callout)
+                        .lineLimit(1)
+                        .foregroundStyle(.primary)
+
+                    if suggestion.type == .table {
+                        Text("Table")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+
+                Spacer()
+
+                if isSelected {
+                    Text("↩")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(isSelected || isHovered ? Color.accentColor.opacity(0.1) : Color.clear)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            isHovered = hovering
+        }
+    }
+
+    private var iconColor: Color {
+        switch suggestion.type {
+        case .table: return .blue
+        case .template: return .purple
+        case .favorite: return .yellow
+        case .history: return .secondary
+        }
+    }
+}
+
+// MARK: - Loading State Components
+
+private struct AnimatedStageIcon: View {
+    let stage: AppState.QueryStage
+    @State private var isAnimating = false
+
+    var body: some View {
+        ZStack {
+            // Background circle
+            Circle()
+                .fill(Color.accentColor.opacity(0.1))
+
+            // Rotating ring for active state
+            Circle()
+                .trim(from: 0, to: 0.7)
+                .stroke(Color.accentColor.opacity(0.3), lineWidth: 3)
+                .rotationEffect(.degrees(isAnimating ? 360 : 0))
+                .animation(.linear(duration: 1.5).repeatForever(autoreverses: false), value: isAnimating)
+
+            // Stage icon
+            Image(systemName: stageIcon)
+                .font(.system(size: 24, weight: .medium))
+                .foregroundStyle(Color.accentColor)
+                .symbolEffect(.pulse, options: .repeating, value: isAnimating)
+        }
+        .onAppear {
+            isAnimating = true
+        }
+    }
+
+    private var stageIcon: String {
+        switch stage {
+        case .idle: return "sparkles"
+        case .translating: return "text.badge.star"
+        case .executing: return "terminal"
+        case .summarizing: return "text.quote"
+        }
+    }
+}
+
+private struct StageConnector: View {
+    let isActive: Bool
+
+    var body: some View {
+        Rectangle()
+            .fill(isActive ? Color.green : Color.secondary.opacity(0.3))
+            .frame(width: 24, height: 2)
+            .animation(.easeInOut(duration: 0.3), value: isActive)
     }
 }

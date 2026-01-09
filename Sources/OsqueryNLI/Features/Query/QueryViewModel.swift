@@ -11,6 +11,8 @@ final class QueryViewModel {
     var queryText: String = ""
     var showRawData: Bool = false
     var showingTemplates: Bool = false
+    var showAutoComplete: Bool = false
+    var selectedSuggestionIndex: Int = 0
 
     // MARK: - Save Feedback
 
@@ -321,5 +323,173 @@ final class QueryViewModel {
             "List all installed apps",
             "What USB devices are connected?"
         ]
+    }
+
+    // MARK: - Auto-Complete
+
+    /// Suggestion types for auto-complete
+    enum SuggestionType {
+        case table
+        case template
+        case favorite
+        case history
+
+        var icon: String {
+            switch self {
+            case .table: return "tablecells"
+            case .template: return "rectangle.stack"
+            case .favorite: return "star.fill"
+            case .history: return "clock"
+            }
+        }
+    }
+
+    struct Suggestion: Identifiable {
+        let id = UUID()
+        let text: String
+        let type: SuggestionType
+        let displayText: String
+    }
+
+    /// Generate suggestions based on current query text
+    var autoCompleteSuggestions: [Suggestion] {
+        let query = queryText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard query.count >= 2 else { return [] }
+
+        var suggestions: [Suggestion] = []
+        let maxSuggestions = 6
+
+        // 1. Match table names
+        let tables = appState.enabledTables.filter { $0.lowercased().contains(query) }
+        for table in tables.prefix(2) {
+            suggestions.append(Suggestion(
+                text: "Show data from \(table)",
+                type: .table,
+                displayText: table
+            ))
+        }
+
+        // 2. Match favorites
+        let matchingFavorites = favorites.filter {
+            $0.query.lowercased().contains(query) ||
+            $0.displayName.lowercased().contains(query)
+        }
+        for fav in matchingFavorites.prefix(2) {
+            suggestions.append(Suggestion(
+                text: fav.query,
+                type: .favorite,
+                displayText: fav.displayName
+            ))
+        }
+
+        // 3. Match recent queries
+        let matchingHistory = inputHistory.reversed().filter {
+            $0.lowercased().contains(query) && $0 != queryText
+        }
+        for histQuery in matchingHistory.prefix(2) {
+            // Avoid duplicates with favorites
+            if !suggestions.contains(where: { $0.text == histQuery }) {
+                suggestions.append(Suggestion(
+                    text: histQuery,
+                    type: .history,
+                    displayText: String(histQuery.prefix(50))
+                ))
+            }
+        }
+
+        // 4. Smart query suggestions based on keywords
+        let keywordSuggestions = generateKeywordSuggestions(for: query)
+        for suggestion in keywordSuggestions {
+            if !suggestions.contains(where: { $0.text == suggestion.text }) {
+                suggestions.append(suggestion)
+            }
+        }
+
+        return Array(suggestions.prefix(maxSuggestions))
+    }
+
+    /// Generate suggestions based on common keywords
+    private func generateKeywordSuggestions(for query: String) -> [Suggestion] {
+        var suggestions: [Suggestion] = []
+
+        let keywordMap: [(keywords: [String], suggestion: String)] = [
+            (["process", "running", "cpu", "memory"], "Show me running processes using the most memory"),
+            (["network", "connection", "port", "listen"], "What ports are listening on this system?"),
+            (["user", "account", "login"], "List all user accounts"),
+            (["disk", "storage", "space"], "Show disk usage and available space"),
+            (["app", "installed", "application", "software"], "List all installed applications"),
+            (["startup", "boot", "launch", "login item"], "What programs start at login?"),
+            (["usb", "device", "hardware"], "What USB devices are connected?"),
+            (["security", "firewall", "sip"], "Check security status (SIP, Gatekeeper)"),
+            (["ai", "llm", "chatgpt", "claude", "gemini"], "What AI tools are installed?"),
+            (["browser", "extension", "chrome", "safari"], "List browser extensions"),
+            (["uptime", "boot", "restart"], "What is the system uptime?"),
+            (["version", "macos", "system"], "What macOS version is this?"),
+        ]
+
+        for (keywords, suggestion) in keywordMap {
+            if keywords.contains(where: { query.contains($0) }) {
+                suggestions.append(Suggestion(
+                    text: suggestion,
+                    type: .template,
+                    displayText: suggestion
+                ))
+            }
+        }
+
+        return suggestions
+    }
+
+    /// Select a suggestion
+    func selectSuggestion(_ suggestion: Suggestion) {
+        queryText = suggestion.text
+        showAutoComplete = false
+        selectedSuggestionIndex = 0
+
+        // Auto-submit for favorites and history
+        if suggestion.type == .favorite || suggestion.type == .history {
+            submitQuery()
+        }
+    }
+
+    /// Navigate suggestions with keyboard
+    func navigateSuggestionUp() {
+        guard showAutoComplete && !autoCompleteSuggestions.isEmpty else { return }
+        if selectedSuggestionIndex > 0 {
+            selectedSuggestionIndex -= 1
+        }
+    }
+
+    func navigateSuggestionDown() {
+        guard showAutoComplete && !autoCompleteSuggestions.isEmpty else { return }
+        if selectedSuggestionIndex < autoCompleteSuggestions.count - 1 {
+            selectedSuggestionIndex += 1
+        }
+    }
+
+    func selectCurrentSuggestion() {
+        guard showAutoComplete && !autoCompleteSuggestions.isEmpty else { return }
+        let suggestions = autoCompleteSuggestions
+        if selectedSuggestionIndex < suggestions.count {
+            selectSuggestion(suggestions[selectedSuggestionIndex])
+        }
+    }
+
+    /// Update auto-complete visibility based on query text
+    func updateAutoComplete() {
+        let hasText = queryText.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2
+        let hasSuggestions = !autoCompleteSuggestions.isEmpty
+
+        if hasText && hasSuggestions && !isQuerying && !isBrowsingHistory {
+            showAutoComplete = true
+            selectedSuggestionIndex = 0
+        } else {
+            showAutoComplete = false
+        }
+    }
+
+    func dismissAutoComplete() {
+        showAutoComplete = false
+        selectedSuggestionIndex = 0
     }
 }
