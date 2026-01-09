@@ -177,7 +177,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         if let button = statusItem.button {
-            updateMenuBarIcon(isQuerying: false)
+            // Set initial icon directly (don't use updateMenuBarIcon which has guard for state changes)
+            button.image = NSImage(systemSymbolName: "terminal.fill", accessibilityDescription: "Osquery NLI")
+            button.toolTip = "Osquery NLI - Click to query"
             button.action = #selector(handleStatusItemClick(_:))
             button.target = self
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])

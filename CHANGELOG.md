@@ -5,6 +5,11 @@ All notable changes to Osquery NLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.9] - 2025-01-09
+
+### Fixed
+- **Critical bug**: Menu bar icon not appearing on launch (guard statement in updateMenuBarIcon was returning early on first call)
+
 ## [1.0.8] - 2025-01-09
 
 ### Added
@@ -128,6 +133,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - osquery integration via osqueryi CLI
 - AI Discovery extension written in Go
 
+[1.0.9]: https://github.com/juergen-kc/OsqueryNLI/compare/v1.0.8...v1.0.9
 [1.0.8]: https://github.com/juergen-kc/OsqueryNLI/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/juergen-kc/OsqueryNLI/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/juergen-kc/OsqueryNLI/compare/v1.0.5...v1.0.6
