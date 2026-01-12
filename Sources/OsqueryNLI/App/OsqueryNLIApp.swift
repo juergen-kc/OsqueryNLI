@@ -29,6 +29,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
     private var historyWindow: NSWindow?
     private var shortcutsWindow: NSWindow?
     private var schemaBrowserWindow: NSWindow?
+    private var scheduledQueriesWindow: NSWindow?
+    private var scheduledResultsWindow: NSWindow?
 
     private var popover: NSPopover?
     private var eventMonitor: Any?
@@ -59,6 +61,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
             shortcutsWindow = nil
         } else if window === schemaBrowserWindow {
             schemaBrowserWindow = nil
+        } else if window === scheduledQueriesWindow {
+            scheduledQueriesWindow = nil
+        } else if window === scheduledResultsWindow {
+            scheduledResultsWindow = nil
         }
     }
 
@@ -139,6 +145,47 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
             name: .openFullQueryWindow,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleShowScheduledQueryResults(_:)),
+            name: .showScheduledQueryResults,
+            object: nil
+        )
+    }
+
+    @objc private func handleShowScheduledQueryResults(_ notification: Foundation.Notification) {
+        // Extract queryId from notification and open results directly
+        if let userInfo = notification.userInfo,
+           let queryId = userInfo["queryId"] as? UUID,
+           let query = appState.scheduledQueries.first(where: { $0.id == queryId }) {
+            openScheduledQueryResults(query)
+        } else {
+            // Fallback to scheduled queries list
+            openScheduledQueries()
+        }
+    }
+
+    func openScheduledQueryResults(_ query: ScheduledQuery) {
+        // Always create a new window to show current results
+        scheduledResultsWindow?.close()
+
+        let contentView = ScheduledQueryResultsView(query: query)
+            .environment(appState)
+            .environment(\.fontScale, appState.fontScale)
+
+        scheduledResultsWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 700, height: 550),
+            styleMask: [.titled, .closable, .resizable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        scheduledResultsWindow?.title = "Results: \(query.name)"
+        scheduledResultsWindow?.contentView = NSHostingView(rootView: contentView)
+        scheduledResultsWindow?.center()
+        scheduledResultsWindow?.delegate = self
+
+        scheduledResultsWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     @objc private func handleOpenHistory() {
@@ -276,6 +323,68 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
 
         menu.addItem(NSMenuItem.separator())
 
+        // Favorites submenu
+        let favoritesItem = NSMenuItem(title: "Favorites", action: nil, keyEquivalent: "")
+        let favoritesSubmenu = NSMenu()
+        if appState.favorites.isEmpty {
+            let emptyItem = NSMenuItem(title: "No favorites yet", action: nil, keyEquivalent: "")
+            emptyItem.isEnabled = false
+            favoritesSubmenu.addItem(emptyItem)
+        } else {
+            for (index, favorite) in appState.favorites.prefix(10).enumerated() {
+                let item = NSMenuItem(
+                    title: favorite.displayName,
+                    action: #selector(runFavoriteQuery(_:)),
+                    keyEquivalent: index < 9 ? "\(index + 1)" : ""
+                )
+                item.target = self
+                item.tag = index
+                item.toolTip = favorite.query
+                favoritesSubmenu.addItem(item)
+            }
+            if appState.favorites.count > 10 {
+                favoritesSubmenu.addItem(NSMenuItem.separator())
+                let moreItem = NSMenuItem(title: "View All Favorites...", action: #selector(openFavorites), keyEquivalent: "")
+                moreItem.target = self
+                favoritesSubmenu.addItem(moreItem)
+            }
+        }
+        favoritesItem.submenu = favoritesSubmenu
+        menu.addItem(favoritesItem)
+
+        // Recent queries submenu
+        let recentItem = NSMenuItem(title: "Recent Queries", action: nil, keyEquivalent: "")
+        let recentSubmenu = NSMenu()
+        let recentQueries = appState.queryHistory.prefix(8)
+        if recentQueries.isEmpty {
+            let emptyItem = NSMenuItem(title: "No recent queries", action: nil, keyEquivalent: "")
+            emptyItem.isEnabled = false
+            recentSubmenu.addItem(emptyItem)
+        } else {
+            for (index, entry) in recentQueries.enumerated() {
+                let displayText = entry.query.count > 40
+                    ? String(entry.query.prefix(40)) + "..."
+                    : entry.query
+                let item = NSMenuItem(
+                    title: displayText,
+                    action: #selector(runRecentQuery(_:)),
+                    keyEquivalent: ""
+                )
+                item.target = self
+                item.tag = index
+                item.toolTip = entry.query
+                recentSubmenu.addItem(item)
+            }
+            recentSubmenu.addItem(NSMenuItem.separator())
+            let historyItem = NSMenuItem(title: "View All History...", action: #selector(openHistory), keyEquivalent: "")
+            historyItem.target = self
+            recentSubmenu.addItem(historyItem)
+        }
+        recentItem.submenu = recentSubmenu
+        menu.addItem(recentItem)
+
+        menu.addItem(NSMenuItem.separator())
+
         let historyItem = NSMenuItem(title: "History", action: #selector(openHistory), keyEquivalent: "h")
         historyItem.target = self
         menu.addItem(historyItem)
@@ -283,6 +392,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
         let schemaItem = NSMenuItem(title: "Schema Browser", action: #selector(openSchemaBrowser), keyEquivalent: "b")
         schemaItem.target = self
         menu.addItem(schemaItem)
+
+        let scheduledItem = NSMenuItem(title: "Scheduled Queries", action: #selector(openScheduledQueries), keyEquivalent: "s")
+        scheduledItem.keyEquivalentModifierMask = [.command, .shift]
+        scheduledItem.target = self
+        menu.addItem(scheduledItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -314,6 +428,40 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
         statusItem.menu = nil // Reset so left-click works again
+    }
+
+    @objc private func runFavoriteQuery(_ sender: NSMenuItem) {
+        let index = sender.tag
+        guard index < appState.favorites.count else { return }
+        let query = appState.favorites[index].query
+        runQueryFromMenu(query)
+    }
+
+    @objc private func runRecentQuery(_ sender: NSMenuItem) {
+        let index = sender.tag
+        let recentQueries = Array(appState.queryHistory.prefix(8))
+        guard index < recentQueries.count else { return }
+        let query = recentQueries[index].query
+        runQueryFromMenu(query)
+    }
+
+    private func runQueryFromMenu(_ query: String) {
+        // Open the query window with the query pre-filled and execute it
+        appState.currentQuery = query
+        appState.lastResult = nil
+        appState.lastError = nil
+        openQuery()
+
+        // Execute the query after a short delay to allow the window to appear
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+            await appState.runQuery(query)
+        }
+    }
+
+    @objc func openFavorites() {
+        // For now, open the query window where favorites are accessible
+        openQuery()
     }
 
     private func togglePopover(_ sender: NSStatusBarButton) {
@@ -474,6 +622,28 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
         }
 
         schemaBrowserWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc func openScheduledQueries() {
+        if scheduledQueriesWindow == nil {
+            let contentView = ScheduledQueriesView()
+                .environment(appState)
+                .environment(\.fontScale, appState.fontScale)
+
+            scheduledQueriesWindow = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 600, height: 500),
+                styleMask: [.titled, .closable, .resizable, .miniaturizable],
+                backing: .buffered,
+                defer: false
+            )
+            scheduledQueriesWindow?.title = "Scheduled Queries"
+            scheduledQueriesWindow?.contentView = NSHostingView(rootView: contentView)
+            scheduledQueriesWindow?.center()
+            scheduledQueriesWindow?.delegate = self
+        }
+
+        scheduledQueriesWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 }

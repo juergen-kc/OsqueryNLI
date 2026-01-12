@@ -4,6 +4,7 @@ struct FavoritesView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     var onSelect: ((String) -> Void)?
+    @State private var favoriteToDelete: FavoriteQuery?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -27,6 +28,28 @@ struct FavoritesView: View {
             }
         }
         .frame(minWidth: 400, minHeight: 300)
+        .confirmationDialog(
+            "Delete Favorite?",
+            isPresented: Binding(
+                get: { favoriteToDelete != nil },
+                set: { if !$0 { favoriteToDelete = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                if let favorite = favoriteToDelete {
+                    appState.removeFromFavorites(favorite)
+                }
+                favoriteToDelete = nil
+            }
+            Button("Cancel", role: .cancel) {
+                favoriteToDelete = nil
+            }
+        } message: {
+            if let favorite = favoriteToDelete {
+                Text("Are you sure you want to remove \"\(favorite.displayName)\" from your favorites?")
+            }
+        }
     }
 
     private var emptyState: some View {
@@ -58,7 +81,7 @@ struct FavoritesView: View {
                         dismiss()
                     },
                     onDelete: {
-                        appState.removeFromFavorites(favorite)
+                        favoriteToDelete = favorite
                     }
                 )
             }

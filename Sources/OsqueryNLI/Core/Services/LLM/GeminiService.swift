@@ -49,7 +49,9 @@ final class GeminiService: LLMServiceProtocol, @unchecked Sendable {
         \(LLMPrompts.translationUserPrompt(query: query, schemaContext: schemaContext))
         """
 
-        let (text, tokenUsage) = try await sendRequest(model: model, prompt: prompt)
+        let (text, tokenUsage) = try await RetryHelper.withRetry {
+            try await sendRequest(model: model, prompt: prompt)
+        }
 
         let sql = cleanSQLResponse(text)
 
@@ -81,7 +83,9 @@ final class GeminiService: LLMServiceProtocol, @unchecked Sendable {
         \(LLMPrompts.summarizationUserPrompt(question: question, sql: sql, jsonResults: jsonString))
         """
 
-        let (text, tokenUsage) = try await sendRequest(model: model, prompt: prompt)
+        let (text, tokenUsage) = try await RetryHelper.withRetry {
+            try await sendRequest(model: model, prompt: prompt)
+        }
 
         return SummaryResult(answer: text.trimmingCharacters(in: .whitespacesAndNewlines), tokenUsage: tokenUsage)
     }

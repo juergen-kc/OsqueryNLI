@@ -5,6 +5,11 @@ import SwiftUI
 @Observable
 @MainActor
 final class AppState {
+    /// Shared instance for use by App Intents (Shortcuts)
+    /// Note: This is optional because it won't be set until the app initializes.
+    /// App Intents should check for nil and throw an appropriate error.
+    nonisolated(unsafe) static var shared: AppState?
+
     // MARK: - Settings
 
     var selectedProvider: LLMProvider {
@@ -45,6 +50,33 @@ final class AppState {
             UserDefaults.standard.set(fontScale.rawValue, forKey: "fontScale")
         }
     }
+
+    // MARK: - Scheduled Queries
+
+    var scheduledQueries: [ScheduledQuery] = [] {
+        didSet {
+            saveScheduledQueries()
+        }
+    }
+
+    var schedulerEnabled: Bool = false {
+        didSet {
+            UserDefaults.standard.set(schedulerEnabled, forKey: "schedulerEnabled")
+            if schedulerEnabled {
+                schedulerService?.start()
+            } else {
+                schedulerService?.stop()
+            }
+        }
+    }
+
+    var notificationsEnabled: Bool = false {
+        didSet {
+            UserDefaults.standard.set(notificationsEnabled, forKey: "notificationsEnabled")
+        }
+    }
+
+    private var schedulerService: SchedulerService?
 
     /// Add AI Discovery tables to enabledTables if not already present
     private func addAITablesToEnabled() {
@@ -244,6 +276,25 @@ final class AppState {
         if mcpAutoStart && mcpServerEnabled {
             startMCPServer()
         }
+
+        // Load scheduled queries and notification settings
+        self.scheduledQueries = loadScheduledQueries()
+        self.schedulerEnabled = UserDefaults.standard.bool(forKey: "schedulerEnabled")
+        self.notificationsEnabled = UserDefaults.standard.bool(forKey: "notificationsEnabled")
+
+        // Initialize scheduler service
+        self.schedulerService = SchedulerService(appState: self)
+        if schedulerEnabled {
+            schedulerService?.start()
+        }
+
+        // Set up notification action handler
+        NotificationService.shared.onViewResults = { [weak self] queryId in
+            self?.handleNotificationViewResults(queryId: queryId)
+        }
+
+        // Set shared instance for App Intents (Shortcuts)
+        AppState.shared = self
     }
 
     // MARK: - LLM Configuration
@@ -426,6 +477,18 @@ final class AppState {
         QueryHistoryLogger.shared.logQuery(query: query, source: .app)
 
         // Refresh local history
+        refreshQueryHistory()
+    }
+
+    /// Log a query to history (public method for Shortcuts integration)
+    /// - Parameters:
+    ///   - query: The SQL query or natural language question
+    ///   - rowCount: Optional number of results returned
+    ///   - source: Source identifier ("app", "mcp", or "shortcut")
+    func logQueryToHistory(query: String, rowCount: Int?, source: String) {
+        // Map "shortcut" to .app since it comes from our app's Shortcuts
+        let querySource: QuerySource = source == "mcp" ? .mcp : .app
+        QueryHistoryLogger.shared.logQuery(query: query, source: querySource, rowCount: rowCount)
         refreshQueryHistory()
     }
 
@@ -631,4 +694,95 @@ final class AppState {
         }
         """
     }
+
+    // MARK: - Scheduled Queries Management
+
+    private var scheduledQueriesFileURL: URL {
+        let appSupport = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first!
+        let dataDir = appSupport.appendingPathComponent("OsqueryNLI")
+        try? FileManager.default.createDirectory(at: dataDir, withIntermediateDirectories: true)
+        return dataDir.appendingPathComponent("scheduled_queries.json")
+    }
+
+    private func loadScheduledQueries() -> [ScheduledQuery] {
+        guard FileManager.default.fileExists(atPath: scheduledQueriesFileURL.path) else {
+            return []
+        }
+        do {
+            let data = try Data(contentsOf: scheduledQueriesFileURL)
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            return try decoder.decode([ScheduledQuery].self, from: data)
+        } catch {
+            print("Failed to load scheduled queries: \(error)")
+            return []
+        }
+    }
+
+    private func saveScheduledQueries() {
+        do {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            encoder.outputFormatting = .prettyPrinted
+            let data = try encoder.encode(scheduledQueries)
+            try data.write(to: scheduledQueriesFileURL, options: .atomic)
+        } catch {
+            print("Failed to save scheduled queries: \(error)")
+        }
+    }
+
+    func addScheduledQuery(_ query: ScheduledQuery) {
+        scheduledQueries.append(query)
+    }
+
+    func removeScheduledQuery(_ query: ScheduledQuery) {
+        scheduledQueries.removeAll { $0.id == query.id }
+        ScheduledQueryResultStore.shared.clearResults(for: query.id)
+    }
+
+    func updateScheduledQuery(_ query: ScheduledQuery) {
+        if let index = scheduledQueries.firstIndex(where: { $0.id == query.id }) {
+            scheduledQueries[index] = query
+        }
+    }
+
+    func runScheduledQueryNow(_ query: ScheduledQuery) async {
+        await schedulerService?.runNow(query)
+    }
+
+    // MARK: - Notifications
+
+    func enableNotifications() async -> Bool {
+        let granted = await NotificationService.shared.requestPermission()
+        if granted {
+            notificationsEnabled = true
+        }
+        return granted
+    }
+
+    func checkNotificationPermission() async -> Bool {
+        let status = await NotificationService.shared.checkPermission()
+        return status == .authorized
+    }
+
+    private func handleNotificationViewResults(queryId: UUID) {
+        // Find the scheduled query and show its results
+        // This will be implemented with the UI
+        if let query = scheduledQueries.first(where: { $0.id == queryId }) {
+            // Post notification that UI can observe
+            NotificationCenter.default.post(
+                name: .showScheduledQueryResults,
+                object: nil,
+                userInfo: ["queryId": queryId, "queryName": query.name]
+            )
+        }
+    }
+}
+
+// MARK: - Notification Names
+extension Notification.Name {
+    static let showScheduledQueryResults = Notification.Name("showScheduledQueryResults")
 }

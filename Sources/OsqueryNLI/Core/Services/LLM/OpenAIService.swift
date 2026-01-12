@@ -41,10 +41,12 @@ final class OpenAIService: LLMServiceProtocol, @unchecked Sendable {
         // Validate inputs
         try validateTranslationInput(query: query, schemaContext: schemaContext)
 
-        let response = try await sendMessage(
-            system: LLMPrompts.translationSystemPrompt(),
-            user: LLMPrompts.translationUserPrompt(query: query, schemaContext: schemaContext)
-        )
+        let response = try await RetryHelper.withRetry {
+            try await sendMessage(
+                system: LLMPrompts.translationSystemPrompt(),
+                user: LLMPrompts.translationUserPrompt(query: query, schemaContext: schemaContext)
+            )
+        }
 
         let sql = cleanSQLResponse(response.text)
 
@@ -70,10 +72,12 @@ final class OpenAIService: LLMServiceProtocol, @unchecked Sendable {
         let jsonData = try JSONSerialization.data(withJSONObject: results, options: .prettyPrinted)
         let jsonString = String(data: jsonData, encoding: .utf8) ?? "[]"
 
-        let response = try await sendMessage(
-            system: LLMPrompts.summarizationSystemPrompt(),
-            user: LLMPrompts.summarizationUserPrompt(question: question, sql: sql, jsonResults: jsonString)
-        )
+        let response = try await RetryHelper.withRetry {
+            try await sendMessage(
+                system: LLMPrompts.summarizationSystemPrompt(),
+                user: LLMPrompts.summarizationUserPrompt(question: question, sql: sql, jsonResults: jsonString)
+            )
+        }
 
         return SummaryResult(answer: response.text.trimmingCharacters(in: .whitespacesAndNewlines), tokenUsage: response.tokenUsage)
     }

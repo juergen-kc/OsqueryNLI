@@ -120,6 +120,85 @@ enum LLMError: LocalizedError {
             return "Request was cancelled."
         }
     }
+
+    /// Whether this error is retryable
+    var isRetryable: Bool {
+        switch self {
+        case .rateLimited, .timeout, .networkError:
+            return true
+        case .notConfigured, .invalidAPIKey, .emptyInput, .invalidResponse, .cannotTranslate, .cancelled:
+            return false
+        }
+    }
+}
+
+/// Configuration for retry behavior
+struct RetryConfiguration {
+    let maxRetries: Int
+    let baseDelay: TimeInterval
+    let maxDelay: TimeInterval
+
+    static let `default` = RetryConfiguration(maxRetries: 3, baseDelay: 1.0, maxDelay: 8.0)
+
+    /// Calculate delay for a given attempt (exponential backoff)
+    func delay(for attempt: Int) -> TimeInterval {
+        let delay = baseDelay * pow(2.0, Double(attempt))
+        return min(delay, maxDelay)
+    }
+}
+
+/// Helper for executing operations with retry logic
+enum RetryHelper {
+    /// Execute an async operation with exponential backoff retry
+    /// - Parameters:
+    ///   - config: Retry configuration
+    ///   - operation: The async operation to execute
+    /// - Returns: The result of the operation
+    static func withRetry<T>(
+        config: RetryConfiguration = .default,
+        operation: () async throws -> T
+    ) async throws -> T {
+        var lastError: Error?
+
+        for attempt in 0...config.maxRetries {
+            do {
+                // Check for cancellation before each attempt
+                try Task.checkCancellation()
+
+                return try await operation()
+            } catch let error as LLMError {
+                lastError = error
+
+                // Don't retry non-retryable errors
+                guard error.isRetryable else {
+                    throw error
+                }
+
+                // Don't retry if we've exhausted attempts
+                guard attempt < config.maxRetries else {
+                    throw error
+                }
+
+                // Calculate delay, respecting rate limit retry-after if available
+                var delay = config.delay(for: attempt)
+                if case .rateLimited(let retryAfter) = error, let retryAfter {
+                    delay = max(delay, retryAfter)
+                }
+
+                // Wait before retrying
+                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            } catch is CancellationError {
+                throw LLMError.cancelled
+            } catch {
+                // For non-LLMError errors (shouldn't happen, but be safe)
+                lastError = error
+                throw error
+            }
+        }
+
+        // Should never reach here, but just in case
+        throw lastError ?? LLMError.invalidResponse
+    }
 }
 
 /// Extension to add input validation helpers
@@ -155,54 +234,74 @@ extension LLMServiceProtocol {
 enum LLMPrompts {
     static func translationSystemPrompt() -> String {
         """
-        You are an expert in osquery SQL.
-        Your task is to translate natural language queries into valid osquery SQL statements.
+        You are an expert osquery SQL translator for macOS systems.
+        Translate natural language questions into valid osquery SQL.
 
-        Rules:
-        1. Return ONLY the SQL query. No markdown, no explanations, no code fences.
-        2. The query must be valid SQLite syntax as used by osquery.
-        3. CRITICAL: Only use tables AND columns that are EXACTLY listed in the provided schema context. Do not invent or guess column names.
-        4. If the query cannot be answered with the given tables, return exactly: ERROR: Cannot answer with available tables.
-        5. If you need to query multiple tables that cannot be joined, return multiple SQL statements separated by a semicolon (;).
-        6. Do NOT use UNION for tables with different schemas.
-        7. IMPORTANT: Do NOT assume or guess column values. For yes/no questions (like "is X enabled?"), query ALL relevant columns without WHERE filters on status values. The summarizer will interpret the results. Column values vary (e.g., "on"/"off", "1"/"0", "enabled"/"disabled", "true"/"false").
-        8. Prefer broader queries (SELECT * or SELECT relevant_columns FROM table) over narrow filtered queries when checking status or existence.
-        9. Use LIMIT for potentially large result sets (processes, files, etc.) unless the user asks for all results.
-        10. For PROCESS searches: Use LIKE patterns with wildcards, not exact matches. Process names on macOS often differ from app names. Example: To find Safari, use `WHERE name LIKE '%Safari%' OR path LIKE '%Safari%'`. Also search the path column since many macOS apps have unique executable names.
-        11. For APPLICATION searches: Check both the `processes` table (for running apps) and search by path containing the app name (e.g., `path LIKE '%AppName.app%'`).
-        12. IMPORTANT: Column names vary between tables! Check the EXACT schema provided. Examples: `launchd` uses `process_type` (NOT `type`), `run_at_load` (NOT `run_at_startup`). Always verify column names against the schema before using them.
+        CRITICAL RULES:
+        1. Return ONLY raw SQL. No markdown, no explanations, no code fences, no ```sql blocks.
+        2. Use ONLY tables and columns EXACTLY as shown in the schema. Never invent columns.
+        3. If impossible with available tables: return exactly "ERROR: Cannot answer with available tables."
+
+        QUERY PATTERNS:
+        - Status checks ("is X enabled?"): SELECT all relevant columns, don't filter. Let results speak.
+        - Process searches: Use LIKE with wildcards on both name AND path columns.
+          Example: WHERE name LIKE '%Chrome%' OR path LIKE '%Chrome%'
+        - App searches: Search path for '.app' pattern: WHERE path LIKE '%AppName.app%'
+        - Large tables (processes, files): Always use LIMIT unless user wants all.
+        - Multiple tables: Use semicolon to separate queries. Never UNION different schemas.
+
+        COMMON MISTAKES TO AVOID:
+        - Don't use `type` for launchd - use `process_type`
+        - Don't use `run_at_startup` - use `run_at_load`
+        - Don't filter on boolean values like WHERE enabled = 'true' - values vary ('1', 'on', 'yes', etc.)
+        - Don't guess column names - verify against schema first
+
+        EXAMPLES:
+        Q: "What's my system uptime?" → SELECT * FROM uptime;
+        Q: "Is FileVault enabled?" → SELECT * FROM disk_encryption;
+        Q: "Top 5 CPU processes" → SELECT name, pid, cpu_percent FROM processes ORDER BY cpu_percent DESC LIMIT 5;
+        Q: "Is Chrome running?" → SELECT name, pid, path FROM processes WHERE name LIKE '%Chrome%' OR path LIKE '%Chrome%';
+        Q: "What starts at login?" → SELECT name, program, run_at_load FROM launchd WHERE run_at_load = '1' LIMIT 20;
         """
     }
 
     static func translationUserPrompt(query: String, schemaContext: String) -> String {
         """
-        Schema context (available tables):
+        AVAILABLE TABLES AND COLUMNS:
         \(schemaContext)
 
-        Natural language query: "\(query)"
+        USER QUESTION: "\(query)"
+
+        SQL:
         """
     }
 
     static func summarizationSystemPrompt() -> String {
         """
-        You are an expert system analyst.
-        Provide concise, natural language answers based on osquery results.
-        Do not just dump the data back. Interpret it meaningfully.
-        If the result is empty, explain what that might mean.
+        You are a helpful system analyst explaining osquery results to users.
+
+        Guidelines:
+        - Be concise but informative (2-4 sentences typically)
+        - Answer the user's actual question, don't just describe the data
+        - Highlight important findings or anomalies
+        - For empty results: explain what that means (e.g., "No matching processes found" or "Feature is not enabled")
+        - Use plain language, avoid jargon unless the user used it
+        - For counts: state the number clearly
+        - For status checks: give a clear yes/no answer with context
         """
     }
 
     static func summarizationUserPrompt(question: String, sql: String, jsonResults: String) -> String {
         """
-        The user asked: "\(question)"
+        User's question: "\(question)"
 
-        We ran the following osquery SQL:
+        SQL executed:
         \(sql)
 
-        Results (JSON):
+        Results:
         \(jsonResults)
 
-        Provide a concise, natural language answer to the user's question based on these results.
+        Provide a helpful, concise answer:
         """
     }
 }

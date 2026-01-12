@@ -179,6 +179,11 @@ public final class OsqueryService: OsqueryServiceProtocol, @unchecked Sendable {
         let stdout = result.stdoutString ?? ""
         let stderr = result.stderrString ?? ""
 
+        // Check for osqueryd crash (NSException, signal, etc.)
+        if let crashInfo = detectOsqueryCrash(stdout: stdout, stderr: stderr, exitCode: result.exitCode) {
+            throw OsqueryError.executionFailed(stderr: crashInfo)
+        }
+
         // Check for errors
         if result.exitCode != 0 {
             let errorMsg = stderr.isEmpty ? stdout : stderr
@@ -389,6 +394,76 @@ public final class OsqueryService: OsqueryServiceProtocol, @unchecked Sendable {
         } catch {
             return false
         }
+    }
+
+    // MARK: - Crash Detection
+
+    /// Detect osqueryd crash and extract useful error information
+    /// Returns a user-friendly error message if crash detected, nil otherwise
+    private func detectOsqueryCrash(stdout: String, stderr: String, exitCode: Int32) -> String? {
+        let combined = stdout + stderr
+
+        // Check for common crash indicators
+        let crashIndicators = [
+            "Terminating app due to uncaught exception",
+            "libc++abi: terminating",
+            "*** First throw call stack:",
+            "Segmentation fault",
+            "Bus error",
+            "Abort trap"
+        ]
+
+        let isCrash = crashIndicators.contains { combined.contains($0) }
+
+        guard isCrash else { return nil }
+
+        // Try to extract the table name that caused the crash
+        // Pattern: _ZN7osquery6tables\d+(\w+)ERNS_ (mangled C++ function name)
+        var tableName: String?
+        if let regex = try? NSRegularExpression(pattern: "_ZN7osquery6tables\\d+([a-zA-Z]+)ERNS_", options: []),
+           let match = regex.firstMatch(in: combined, options: [], range: NSRange(combined.startIndex..., in: combined)),
+           let range = Range(match.range(at: 1), in: combined) {
+            // Convert camelCase to snake_case (e.g., "genConnectedDisplays" -> "connected_displays")
+            let funcName = String(combined[range])
+            if funcName.hasPrefix("gen") {
+                let withoutGen = String(funcName.dropFirst(3))
+                tableName = camelCaseToSnakeCase(withoutGen)
+            }
+        }
+
+        // Build user-friendly message
+        if let table = tableName {
+            return "osquery crashed while querying the '\(table)' table. This is a bug in osquery, not this app. Try disabling '\(table)' in Settings → Tables, or query different tables."
+        } else {
+            return "osquery crashed unexpectedly. This is a bug in osquery's native code. Try querying different tables or restart the app."
+        }
+    }
+
+    /// Convert CamelCase to snake_case
+    /// Handles consecutive uppercase letters correctly (e.g., "USBDevices" -> "usb_devices")
+    private func camelCaseToSnakeCase(_ input: String) -> String {
+        guard !input.isEmpty else { return input }
+
+        var result = ""
+        let chars = Array(input)
+
+        for (index, char) in chars.enumerated() {
+            if char.isUppercase {
+                // Add underscore before uppercase letter if:
+                // - Not at the start
+                // - Previous char was lowercase, OR
+                // - Next char exists and is lowercase (handles "USBDevices" -> "usb_devices")
+                let prevIsLower = index > 0 && chars[index - 1].isLowercase
+                let nextIsLower = index + 1 < chars.count && chars[index + 1].isLowercase
+                if index > 0 && (prevIsLower || nextIsLower) {
+                    result += "_"
+                }
+                result += char.lowercased()
+            } else {
+                result += String(char)
+            }
+        }
+        return result
     }
 
     // MARK: - SQL Validation

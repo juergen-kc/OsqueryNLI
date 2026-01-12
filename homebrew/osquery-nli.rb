@@ -1,6 +1,6 @@
 cask "osquery-nli" do
-  version "1.1.1"
-  sha256 "71247046f6135a283422667c42cdbdf8d095e4a4b2fa191cddcd315fbbdc7fba"
+  version "1.5.0"
+  sha256 "651bc6b283eaf28747d0579ce8ade78fba4fa6ab733000e5e4060564e5ee523a"
 
   url "https://github.com/juergen-kc/OsqueryNLI/releases/download/#{version}/OsqueryNLI-#{version}.dmg"
   name "Osquery NLI"
