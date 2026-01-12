@@ -1,7 +1,7 @@
 import Foundation
 
 /// Condition that triggers an alert
-enum AlertCondition: Codable, Equatable, Sendable {
+public enum AlertCondition: Codable, Equatable, Hashable, Sendable {
     case rowCountGreaterThan(Int)
     case rowCountLessThan(Int)
     case rowCountEquals(Int)
@@ -10,7 +10,7 @@ enum AlertCondition: Codable, Equatable, Sendable {
     case noResults
     case containsValue(column: String, value: String)
 
-    var displayName: String {
+    public var displayName: String {
         switch self {
         case .rowCountGreaterThan(let n): return "More than \(n) results"
         case .rowCountLessThan(let n): return "Fewer than \(n) results"
@@ -23,7 +23,7 @@ enum AlertCondition: Codable, Equatable, Sendable {
     }
 
     /// Evaluate the condition against query results
-    func evaluate(results: [[String: Any]]) -> Bool {
+    public func evaluate(results: [[String: Any]]) -> Bool {
         let count = results.count
 
         switch self {
@@ -51,7 +51,7 @@ enum AlertCondition: Codable, Equatable, Sendable {
 }
 
 /// Alert condition type for UI picker
-enum AlertConditionType: String, CaseIterable, Sendable {
+public enum AlertConditionType: String, CaseIterable, Sendable {
     case anyResults = "any"
     case noResults = "none"
     case moreThan = "more"
@@ -60,7 +60,7 @@ enum AlertConditionType: String, CaseIterable, Sendable {
     case notEquals = "notEquals"
     case contains = "contains"
 
-    var displayName: String {
+    public var displayName: String {
         switch self {
         case .anyResults: return "Any results"
         case .noResults: return "No results"
@@ -72,7 +72,7 @@ enum AlertConditionType: String, CaseIterable, Sendable {
         }
     }
 
-    var needsThreshold: Bool {
+    public var needsThreshold: Bool {
         switch self {
         case .moreThan, .lessThan, .equals, .notEquals:
             return true
@@ -81,21 +81,21 @@ enum AlertConditionType: String, CaseIterable, Sendable {
         }
     }
 
-    var needsColumnValue: Bool {
+    public var needsColumnValue: Bool {
         self == .contains
     }
 }
 
 /// Rule that defines when to send notifications for a scheduled query
-struct AlertRule: Identifiable, Codable, Equatable, Sendable {
-    let id: UUID
-    var condition: AlertCondition
-    var notifyOnMatch: Bool
-    var notifyOnChange: Bool
-    var lastTriggered: Date?
-    var lastResultHash: String?
+public struct AlertRule: Identifiable, Codable, Equatable, Hashable, Sendable {
+    public let id: UUID
+    public var condition: AlertCondition
+    public var notifyOnMatch: Bool
+    public var notifyOnChange: Bool
+    public var lastTriggered: Date?
+    public var lastResultHash: String?
 
-    init(
+    public init(
         id: UUID = UUID(),
         condition: AlertCondition,
         notifyOnMatch: Bool = true,
@@ -112,7 +112,7 @@ struct AlertRule: Identifiable, Codable, Equatable, Sendable {
     }
 
     /// Check if alert should fire based on results and previous state
-    func shouldAlert(results: [[String: Any]], previousResultCount: Int?) -> Bool {
+    public func shouldAlert(results: [[String: Any]], previousResultCount: Int?) -> Bool {
         let conditionMet = condition.evaluate(results: results)
 
         if notifyOnMatch && conditionMet {

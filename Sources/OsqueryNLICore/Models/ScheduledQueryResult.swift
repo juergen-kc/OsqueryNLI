@@ -1,26 +1,26 @@
 import Foundation
 
 /// Result of a scheduled query execution
-struct ScheduledQueryResult: Identifiable, Codable, Sendable {
-    let id: UUID
-    let scheduledQueryId: UUID
-    let timestamp: Date
-    let rowCount: Int
-    let resultSummary: String?
-    let alertTriggered: Bool
-    let sql: String?
-    let error: String?
+public struct ScheduledQueryResult: Identifiable, Codable, Sendable {
+    public let id: UUID
+    public let scheduledQueryId: UUID
+    public let timestamp: Date
+    public let rowCount: Int
+    public let resultSummary: String?
+    public let alertTriggered: Bool
+    public let sql: String?
+    public let error: String?
 
     /// Actual result data (up to maxStoredRows)
-    let resultData: [[String: String]]?
+    public let resultData: [[String: String]]?
 
     /// Column names in display order
-    let columns: [String]?
+    public let columns: [String]?
 
     /// Maximum rows to store per result
-    static let maxStoredRows = 100
+    public static let maxStoredRows = 100
 
-    init(
+    public init(
         id: UUID = UUID(),
         scheduledQueryId: UUID,
         timestamp: Date = Date(),
@@ -45,7 +45,7 @@ struct ScheduledQueryResult: Identifiable, Codable, Sendable {
     }
 
     /// Create a result with captured data from query results
-    static func from(
+    public static func from(
         scheduledQueryId: UUID,
         results: [[String: Any]],
         alertTriggered: Bool,
@@ -79,7 +79,7 @@ struct ScheduledQueryResult: Identifiable, Codable, Sendable {
     }
 
     /// Create a result summary from query results (first few rows)
-    static func createSummary(from results: [[String: Any]], maxRows: Int = 3) -> String? {
+    public static func createSummary(from results: [[String: Any]], maxRows: Int = 3) -> String? {
         guard !results.isEmpty else { return nil }
 
         let preview = results.prefix(maxRows).map { row in
@@ -93,7 +93,7 @@ struct ScheduledQueryResult: Identifiable, Codable, Sendable {
     }
 
     /// Check if this result has viewable data
-    var hasData: Bool {
+    public var hasData: Bool {
         resultData != nil && !(resultData?.isEmpty ?? true)
     }
 }

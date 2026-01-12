@@ -166,10 +166,3 @@ struct ScheduledQueriesView: View {
         }
     }
 }
-
-// Make ScheduledQuery hashable for sheet presentation
-extension ScheduledQuery: Hashable {
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
-}

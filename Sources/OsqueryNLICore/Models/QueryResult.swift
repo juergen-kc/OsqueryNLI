@@ -1,39 +1,39 @@
 import Foundation
 
 /// Represents the result of executing an osquery SQL query
-struct QueryResult: Identifiable, Sendable {
-    let id: UUID
-    let sql: String
-    let rows: [[String: String]]
-    let columns: [ColumnInfo]
-    let executionTime: TimeInterval
-    let summary: String?
-    let timestamp: Date
-    let tokenUsage: TokenUsage?
+public struct QueryResult: Identifiable, Sendable {
+    public let id: UUID
+    public let sql: String
+    public let rows: [[String: String]]
+    public let columns: [ColumnInfo]
+    public let executionTime: TimeInterval
+    public let summary: String?
+    public let timestamp: Date
+    public let tokenUsage: TokenUsage?
 
-    var isEmpty: Bool { rows.isEmpty }
-    var rowCount: Int { rows.count }
+    public var isEmpty: Bool { rows.isEmpty }
+    public var rowCount: Int { rows.count }
 
-    struct ColumnInfo: Identifiable, Sendable, Hashable {
-        let id: UUID
-        let name: String
-        let type: ColumnType
+    public struct ColumnInfo: Identifiable, Sendable, Hashable {
+        public let id: UUID
+        public let name: String
+        public let type: ColumnType
 
-        init(name: String, type: ColumnType = .string) {
-            self.id = UUID()
+        public init(id: UUID = UUID(), name: String, type: ColumnType = .string) {
+            self.id = id
             self.name = name
             self.type = type
         }
     }
 
-    enum ColumnType: Sendable {
+    public enum ColumnType: Sendable {
         case string
         case number
         case boolean
         case unknown
     }
 
-    init(
+    public init(
         id: UUID = UUID(),
         sql: String,
         rows: [[String: String]],
@@ -66,7 +66,7 @@ struct QueryResult: Identifiable, Sendable {
 
 extension QueryResult {
     /// Export to CSV format
-    func toCSV() -> String {
+    public func toCSV() -> String {
         guard !columns.isEmpty else { return "" }
 
         var csv = columns.map(\.name).joined(separator: ",") + "\n"
@@ -87,7 +87,7 @@ extension QueryResult {
     }
 
     /// Export to JSON format
-    func toJSON(prettyPrinted: Bool = true) -> String {
+    public func toJSON(prettyPrinted: Bool = true) -> String {
         let options: JSONSerialization.WritingOptions = prettyPrinted ? [.prettyPrinted, .sortedKeys] : .sortedKeys
 
         // Convert [[String: String]] to [[String: Any]] for JSONSerialization
@@ -102,7 +102,7 @@ extension QueryResult {
     }
 
     /// Export as formatted text table
-    func toTextTable() -> String {
+    public func toTextTable() -> String {
         guard !columns.isEmpty, !rows.isEmpty else { return "No results" }
 
         // Calculate column widths
@@ -145,7 +145,7 @@ extension QueryResult {
     }
 
     /// Export as Markdown table
-    func toMarkdown() -> String {
+    public func toMarkdown() -> String {
         guard !columns.isEmpty else { return "*No results*" }
 
         var md = ""
@@ -176,19 +176,13 @@ extension QueryResult {
 
         return md
     }
-
-    /// Export as XLSX (Excel) format
-    /// Returns the raw bytes of the XLSX file
-    func toXLSX() -> Data? {
-        XLSXExporter.export(result: self)
-    }
 }
 
 // MARK: - Builder for creating from osquery output
 
 extension QueryResult {
     /// Create QueryResult from osquery JSON output
-    static func from(
+    public static func from(
         sql: String,
         osqueryOutput: [[String: Any]],
         executionTime: TimeInterval = 0,

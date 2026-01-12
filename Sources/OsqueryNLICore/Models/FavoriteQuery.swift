@@ -1,21 +1,21 @@
 import Foundation
 
 /// A saved favorite query
-struct FavoriteQuery: Identifiable, Codable, Equatable {
-    let id: UUID
-    var query: String
-    var name: String?
-    let createdAt: Date
+public struct FavoriteQuery: Identifiable, Codable, Equatable, Sendable {
+    public let id: UUID
+    public var query: String
+    public var name: String?
+    public let createdAt: Date
 
-    init(query: String, name: String? = nil) {
-        self.id = UUID()
+    public init(id: UUID = UUID(), query: String, name: String? = nil, createdAt: Date = Date()) {
+        self.id = id
         self.query = query
         self.name = name
-        self.createdAt = Date()
+        self.createdAt = createdAt
     }
 
     /// Display name - uses custom name or truncated query
-    var displayName: String {
+    public var displayName: String {
         if let name = name, !name.isEmpty {
             return name
         }

@@ -1,7 +1,7 @@
 import Foundation
 
 /// Interval at which scheduled queries run
-enum ScheduleInterval: String, Codable, CaseIterable, Sendable {
+public enum ScheduleInterval: String, Codable, CaseIterable, Sendable {
     case every5Minutes = "5min"
     case every15Minutes = "15min"
     case every30Minutes = "30min"
@@ -9,7 +9,7 @@ enum ScheduleInterval: String, Codable, CaseIterable, Sendable {
     case every6Hours = "6hours"
     case daily = "daily"
 
-    var seconds: TimeInterval {
+    public var seconds: TimeInterval {
         switch self {
         case .every5Minutes: return 300
         case .every15Minutes: return 900
@@ -20,7 +20,7 @@ enum ScheduleInterval: String, Codable, CaseIterable, Sendable {
         }
     }
 
-    var displayName: String {
+    public var displayName: String {
         switch self {
         case .every5Minutes: return "Every 5 minutes"
         case .every15Minutes: return "Every 15 minutes"
@@ -33,19 +33,19 @@ enum ScheduleInterval: String, Codable, CaseIterable, Sendable {
 }
 
 /// A query scheduled to run at regular intervals
-struct ScheduledQuery: Identifiable, Codable, Equatable, Sendable {
-    let id: UUID
-    var name: String
-    var query: String
-    var isSQL: Bool
-    var interval: ScheduleInterval
-    var isEnabled: Bool
-    var lastRun: Date?
-    var lastResultCount: Int?
-    var alertRule: AlertRule?
-    let createdAt: Date
+public struct ScheduledQuery: Identifiable, Codable, Equatable, Hashable, Sendable {
+    public let id: UUID
+    public var name: String
+    public var query: String
+    public var isSQL: Bool
+    public var interval: ScheduleInterval
+    public var isEnabled: Bool
+    public var lastRun: Date?
+    public var lastResultCount: Int?
+    public var alertRule: AlertRule?
+    public let createdAt: Date
 
-    init(
+    public init(
         id: UUID = UUID(),
         name: String,
         query: String,
@@ -70,7 +70,7 @@ struct ScheduledQuery: Identifiable, Codable, Equatable, Sendable {
     }
 
     /// Check if the query should run based on its interval and last run time
-    func shouldRun(at date: Date = Date()) -> Bool {
+    public func shouldRun(at date: Date = Date()) -> Bool {
         guard isEnabled else { return false }
         guard let lastRun = lastRun else { return true }
         return date.timeIntervalSince(lastRun) >= interval.seconds

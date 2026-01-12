@@ -1,16 +1,15 @@
 import Foundation
 
 /// Represents a user query with its metadata
-/// Note: Will use SwiftData @Model when building as Xcode project
-struct Query: Identifiable, Codable, Hashable {
-    let id: UUID
-    var naturalLanguage: String
-    var sql: String?
-    var timestamp: Date
-    var isFavorite: Bool
-    var tags: [String]
+public struct Query: Identifiable, Codable, Hashable, Sendable {
+    public let id: UUID
+    public var naturalLanguage: String
+    public var sql: String?
+    public var timestamp: Date
+    public var isFavorite: Bool
+    public var tags: [String]
 
-    init(
+    public init(
         id: UUID = UUID(),
         naturalLanguage: String,
         sql: String? = nil,
@@ -28,12 +27,12 @@ struct Query: Identifiable, Codable, Hashable {
 }
 
 /// Non-persisted query for in-flight operations
-struct QueryRequest: Sendable {
-    let id: UUID
-    let naturalLanguage: String
-    let timestamp: Date
+public struct QueryRequest: Sendable {
+    public let id: UUID
+    public let naturalLanguage: String
+    public let timestamp: Date
 
-    init(naturalLanguage: String) {
+    public init(naturalLanguage: String) {
         self.id = UUID()
         self.naturalLanguage = naturalLanguage
         self.timestamp = Date()

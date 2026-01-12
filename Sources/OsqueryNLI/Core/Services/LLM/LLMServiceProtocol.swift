@@ -1,25 +1,5 @@
 import Foundation
-
-/// Token usage information from LLM API calls
-struct TokenUsage: Sendable, Codable {
-    let inputTokens: Int
-    let outputTokens: Int
-
-    var totalTokens: Int { inputTokens + outputTokens }
-
-    init(inputTokens: Int = 0, outputTokens: Int = 0) {
-        self.inputTokens = inputTokens
-        self.outputTokens = outputTokens
-    }
-
-    /// Combine two token usages (for aggregating translation + summarization)
-    static func + (lhs: TokenUsage, rhs: TokenUsage) -> TokenUsage {
-        TokenUsage(
-            inputTokens: lhs.inputTokens + rhs.inputTokens,
-            outputTokens: lhs.outputTokens + rhs.outputTokens
-        )
-    }
-}
+import OsqueryNLICore
 
 /// Result of translating natural language to SQL
 struct TranslationResult: Sendable {

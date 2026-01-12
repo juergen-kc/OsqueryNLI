@@ -1,14 +1,14 @@
 import Foundation
 
 /// Supported LLM providers
-enum LLMProvider: String, CaseIterable, Identifiable, Codable {
+public enum LLMProvider: String, CaseIterable, Identifiable, Codable, Sendable {
     case claude = "claude"
     case gemini = "gemini"
     case openai = "openai"
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var displayName: String {
+    public var displayName: String {
         switch self {
         case .claude: return "Claude (Anthropic)"
         case .gemini: return "Gemini (Google)"
@@ -16,7 +16,7 @@ enum LLMProvider: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    var defaultModel: String {
+    public var defaultModel: String {
         switch self {
         case .claude: return "claude-sonnet-4-20250514"
         case .gemini: return "gemini-2.0-flash-lite"
@@ -24,7 +24,7 @@ enum LLMProvider: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    var availableModels: [String] {
+    public var availableModels: [String] {
         switch self {
         case .claude: return ["claude-sonnet-4-20250514", "claude-3-5-haiku-20241022"]
         case .gemini: return ["gemini-2.0-flash-lite", "gemini-1.5-pro"]
@@ -32,7 +32,7 @@ enum LLMProvider: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    var apiKeyPlaceholder: String {
+    public var apiKeyPlaceholder: String {
         switch self {
         case .claude: return "sk-ant-..."
         case .gemini: return "AIza..."
@@ -40,7 +40,7 @@ enum LLMProvider: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    var helpURL: URL {
+    public var helpURL: URL {
         switch self {
         case .claude: return URL(string: "https://console.anthropic.com/")!
         case .gemini: return URL(string: "https://aistudio.google.com/apikey")!
@@ -50,11 +50,16 @@ enum LLMProvider: String, CaseIterable, Identifiable, Codable {
 }
 
 /// Configuration for LLM provider
-struct LLMConfiguration: Codable, Equatable {
-    var provider: LLMProvider
-    var model: String
+public struct LLMConfiguration: Codable, Equatable, Sendable {
+    public var provider: LLMProvider
+    public var model: String
 
-    static var `default`: LLMConfiguration {
+    public init(provider: LLMProvider, model: String) {
+        self.provider = provider
+        self.model = model
+    }
+
+    public static var `default`: LLMConfiguration {
         LLMConfiguration(provider: .gemini, model: LLMProvider.gemini.defaultModel)
     }
 }

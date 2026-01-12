@@ -2,10 +2,10 @@ import Foundation
 
 /// Exports QueryResult to XLSX (Excel) format without external dependencies
 /// XLSX is a ZIP archive containing XML files following the Office Open XML standard
-enum XLSXExporter {
+public enum XLSXExporter {
 
     /// Export QueryResult to XLSX data
-    static func export(result: QueryResult) -> Data? {
+    public static func export(result: QueryResult) -> Data? {
         guard !result.columns.isEmpty else { return nil }
 
         // Create the XML content files
@@ -286,5 +286,15 @@ enum XLSXExporter {
 
         crc ^= 0xFFFFFFFF
         return uint32LE(crc)
+    }
+}
+
+// MARK: - QueryResult Extension for XLSX Export
+
+extension QueryResult {
+    /// Export as XLSX (Excel) format
+    /// Returns the raw bytes of the XLSX file
+    public func toXLSX() -> Data? {
+        XLSXExporter.export(result: self)
     }
 }
