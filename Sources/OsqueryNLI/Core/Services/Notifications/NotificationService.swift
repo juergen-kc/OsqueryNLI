@@ -1,9 +1,11 @@
 import Foundation
 import UserNotifications
+import OSLog
 
 /// Service for managing macOS notifications
 final class NotificationService: NSObject, @unchecked Sendable {
     static let shared = NotificationService()
+    private let logger = AppLogger.notifications
 
     private let notificationCenter = UNUserNotificationCenter.current()
 
@@ -24,7 +26,7 @@ final class NotificationService: NSObject, @unchecked Sendable {
             )
             return granted
         } catch {
-            print("Failed to request notification permission: \(error)")
+            logger.error("Failed to request notification permission: \(error.localizedDescription)")
             return false
         }
     }
@@ -54,9 +56,9 @@ final class NotificationService: NSObject, @unchecked Sendable {
             trigger: nil
         )
 
-        notificationCenter.add(request) { error in
+        notificationCenter.add(request) { [weak self] error in
             if let error = error {
-                print("Failed to send notification: \(error)")
+                self?.logger.error("Failed to send notification: \(error.localizedDescription)")
             }
         }
     }

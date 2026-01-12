@@ -45,6 +45,7 @@ struct ScheduledQueryRow: View {
                         Image(systemName: "bell.fill")
                             .font(.caption)
                             .foregroundColor(.orange)
+                            .accessibilityLabel("Has alert configured")
                     }
                 }
 

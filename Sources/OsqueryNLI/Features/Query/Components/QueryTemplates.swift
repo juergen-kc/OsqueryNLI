@@ -547,23 +547,70 @@ struct QueryTemplatesView: View {
             return QueryTemplateLibrary.categories
         }
 
+        let searchTerms = searchText.lowercased().split(separator: " ").map(String.init)
+
         return QueryTemplateLibrary.categories.compactMap { category in
-            let filteredTemplates = category.templates.filter { template in
-                template.title.localizedCaseInsensitiveContains(searchText) ||
-                template.query.localizedCaseInsensitiveContains(searchText) ||
-                template.description.localizedCaseInsensitiveContains(searchText)
+            // Calculate relevance score for each matching template
+            let scoredTemplates = category.templates.compactMap { template -> (template: QueryTemplate, score: Int)? in
+                let score = calculateRelevanceScore(template: template, searchTerms: searchTerms)
+                return score > 0 ? (template, score) : nil
             }
 
-            if filteredTemplates.isEmpty {
+            if scoredTemplates.isEmpty {
                 return nil
             }
+
+            // Sort by score (highest first)
+            let sortedTemplates = scoredTemplates
+                .sorted { $0.score > $1.score }
+                .map { $0.template }
 
             return QueryCategory(
                 name: category.name,
                 icon: category.icon,
-                templates: filteredTemplates
+                templates: sortedTemplates
             )
         }
+    }
+
+    /// Calculate relevance score for a template based on search terms
+    /// Higher scores mean better matches
+    private func calculateRelevanceScore(template: QueryTemplate, searchTerms: [String]) -> Int {
+        var score = 0
+        let titleLower = template.title.lowercased()
+        let queryLower = template.query.lowercased()
+        let descLower = template.description.lowercased()
+
+        for term in searchTerms {
+            // Title exact word match (highest priority)
+            if titleLower.contains(term) {
+                score += titleLower.hasPrefix(term) ? 100 : 80
+                // Bonus for exact word boundary match
+                if titleLower.split(separator: " ").contains(where: { $0 == term }) {
+                    score += 20
+                }
+            }
+
+            // Query contains term
+            if queryLower.contains(term) {
+                score += 40
+            }
+
+            // Description contains term
+            if descLower.contains(term) {
+                score += 20
+            }
+        }
+
+        // Bonus if all terms match (phrase search)
+        let allTermsMatch = searchTerms.allSatisfy { term in
+            titleLower.contains(term) || queryLower.contains(term) || descLower.contains(term)
+        }
+        if allTermsMatch && searchTerms.count > 1 {
+            score += 50
+        }
+
+        return score
     }
 
     var body: some View {

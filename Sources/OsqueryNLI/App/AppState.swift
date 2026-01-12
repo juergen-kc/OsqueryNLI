@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import OSLog
 
 /// Main application state using @Observable (macOS 14+)
 @Observable
@@ -9,6 +10,8 @@ final class AppState {
     /// Note: This is optional because it won't be set until the app initializes.
     /// App Intents should check for nil and throw an appropriate error.
     nonisolated(unsafe) static var shared: AppState?
+
+    private let logger = AppLogger.appState
 
     // MARK: - Settings
 
@@ -84,6 +87,82 @@ final class AppState {
         let missing = aiTables.subtracting(enabledTables)
         if !missing.isEmpty {
             enabledTables = enabledTables.union(aiTables)
+        }
+    }
+
+    // MARK: - Undo Support
+
+    /// Represents an action that can be undone
+    enum UndoAction: Equatable {
+        case deletedFavorite(FavoriteQuery)
+        case deletedScheduledQuery(ScheduledQuery)
+
+        var message: String {
+            switch self {
+            case .deletedFavorite(let fav):
+                return "Deleted \"\(fav.displayName)\""
+            case .deletedScheduledQuery(let query):
+                return "Deleted \"\(query.name)\""
+            }
+        }
+    }
+
+    /// Currently pending undo action (shown in toast)
+    var pendingUndo: UndoAction?
+
+    /// Timer for auto-dismissing undo toast
+    private var undoTimer: Timer?
+
+    /// Duration before undo expires (seconds)
+    private let undoDuration: TimeInterval = 5.0
+
+    /// Perform undo of the pending action
+    func performUndo() {
+        guard let action = pendingUndo else { return }
+        undoTimer?.invalidate()
+        undoTimer = nil
+
+        switch action {
+        case .deletedFavorite(let favorite):
+            // Re-add the favorite at its original position or at the start
+            if !favorites.contains(where: { $0.id == favorite.id }) {
+                favorites.insert(favorite, at: 0)
+                saveFavorites()
+            }
+        case .deletedScheduledQuery(let query):
+            // Re-add the scheduled query
+            if !scheduledQueries.contains(where: { $0.id == query.id }) {
+                scheduledQueries.append(query)
+            }
+        }
+
+        pendingUndo = nil
+    }
+
+    /// Dismiss the undo toast without performing undo
+    func dismissUndo() {
+        undoTimer?.invalidate()
+        undoTimer = nil
+        // If dismissing a scheduled query undo, clear its results now
+        if case .deletedScheduledQuery(let query) = pendingUndo {
+            ScheduledQueryResultStore.shared.clearResults(for: query.id)
+        }
+        pendingUndo = nil
+    }
+
+    /// Start the undo timer for auto-dismissal
+    private func startUndoTimer() {
+        undoTimer?.invalidate()
+        undoTimer = Timer.scheduledTimer(withTimeInterval: undoDuration, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                guard let self = self else { return }
+                // If undo expires for a scheduled query, now clear its results
+                if case .deletedScheduledQuery(let query) = self.pendingUndo {
+                    ScheduledQueryResultStore.shared.clearResults(for: query.id)
+                }
+                self.pendingUndo = nil
+                self.undoTimer = nil
+            }
         }
     }
 
@@ -186,6 +265,13 @@ final class AppState {
 
     var favorites: [FavoriteQuery] = []
 
+    // MARK: - Recent Exports
+
+    /// Maximum number of recent exports to track
+    private let maxRecentExports = 5
+
+    var recentExports: [RecentExport] = []
+
     // MARK: - Osquery Status
 
     var isOsqueryAvailable: Bool = false
@@ -245,6 +331,12 @@ final class AppState {
         if let data = UserDefaults.standard.data(forKey: "favorites"),
            let savedFavorites = try? JSONDecoder().decode([FavoriteQuery].self, from: data) {
             self.favorites = savedFavorites
+        }
+
+        // Load recent exports
+        if let data = UserDefaults.standard.data(forKey: "recentExports"),
+           let savedExports = try? JSONDecoder().decode([RecentExport].self, from: data) {
+            self.recentExports = savedExports
         }
 
         // Load MCP settings
@@ -522,9 +614,14 @@ final class AppState {
         saveFavorites()
     }
 
-    func removeFromFavorites(_ favorite: FavoriteQuery) {
+    func removeFromFavorites(_ favorite: FavoriteQuery, allowUndo: Bool = true) {
         favorites.removeAll { $0.id == favorite.id }
         saveFavorites()
+
+        if allowUndo {
+            pendingUndo = .deletedFavorite(favorite)
+            startUndoTimer()
+        }
     }
 
     func updateFavorite(_ favorite: FavoriteQuery, name: String) {
@@ -546,9 +643,57 @@ final class AppState {
         }
     }
 
+    func moveFavorites(from source: IndexSet, to destination: Int) {
+        favorites.move(fromOffsets: source, toOffset: destination)
+        saveFavorites()
+    }
+
     private func saveFavorites() {
         if let data = try? JSONEncoder().encode(favorites) {
             UserDefaults.standard.set(data, forKey: "favorites")
+        }
+    }
+
+    // MARK: - Recent Exports Management
+
+    /// Record a successful export
+    func recordExport(filePath: String, fileType: ExportFileType) {
+        let export = RecentExport(filePath: filePath, fileType: fileType)
+
+        // Remove any existing export to the same path
+        recentExports.removeAll { $0.filePath == filePath }
+
+        // Add at the beginning
+        recentExports.insert(export, at: 0)
+
+        // Trim to max count
+        if recentExports.count > maxRecentExports {
+            recentExports = Array(recentExports.prefix(maxRecentExports))
+        }
+
+        saveRecentExports()
+    }
+
+    /// Remove a recent export from the list
+    func removeRecentExport(_ export: RecentExport) {
+        recentExports.removeAll { $0.id == export.id }
+        saveRecentExports()
+    }
+
+    /// Clear all recent exports
+    func clearRecentExports() {
+        recentExports.removeAll()
+        saveRecentExports()
+    }
+
+    /// Get the most recent export location (for "Export Again" feature)
+    var lastExportDirectory: String? {
+        recentExports.first?.directoryPath
+    }
+
+    private func saveRecentExports() {
+        if let data = try? JSONEncoder().encode(recentExports) {
+            UserDefaults.standard.set(data, forKey: "recentExports")
         }
     }
 
@@ -703,7 +848,12 @@ final class AppState {
             in: .userDomainMask
         ).first!
         let dataDir = appSupport.appendingPathComponent("OsqueryNLI")
-        try? FileManager.default.createDirectory(at: dataDir, withIntermediateDirectories: true)
+        // Create with owner-only permissions (0700)
+        try? FileManager.default.createDirectory(
+            at: dataDir,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]
+        )
         return dataDir.appendingPathComponent("scheduled_queries.json")
     }
 
@@ -717,7 +867,7 @@ final class AppState {
             decoder.dateDecodingStrategy = .iso8601
             return try decoder.decode([ScheduledQuery].self, from: data)
         } catch {
-            print("Failed to load scheduled queries: \(error)")
+            logger.error("Failed to load scheduled queries: \(error.localizedDescription)")
             return []
         }
     }
@@ -730,7 +880,7 @@ final class AppState {
             let data = try encoder.encode(scheduledQueries)
             try data.write(to: scheduledQueriesFileURL, options: .atomic)
         } catch {
-            print("Failed to save scheduled queries: \(error)")
+            logger.error("Failed to save scheduled queries: \(error.localizedDescription)")
         }
     }
 
@@ -738,9 +888,17 @@ final class AppState {
         scheduledQueries.append(query)
     }
 
-    func removeScheduledQuery(_ query: ScheduledQuery) {
+    func removeScheduledQuery(_ query: ScheduledQuery, allowUndo: Bool = true) {
         scheduledQueries.removeAll { $0.id == query.id }
-        ScheduledQueryResultStore.shared.clearResults(for: query.id)
+
+        if allowUndo {
+            // Don't clear results yet - only clear when undo expires
+            pendingUndo = .deletedScheduledQuery(query)
+            startUndoTimer()
+        } else {
+            // Clear results immediately when not allowing undo
+            ScheduledQueryResultStore.shared.clearResults(for: query.id)
+        }
     }
 
     func updateScheduledQuery(_ query: ScheduledQuery) {

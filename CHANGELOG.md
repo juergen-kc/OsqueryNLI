@@ -5,6 +5,53 @@ All notable changes to Osquery NLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.2] - 2026-01-12
+
+### Added
+- **Recent Exports Quick Access** - Re-export results to recent locations with one click
+  - Tracks last 5 export locations (JSON, CSV, Markdown, Excel)
+  - "Export Again" section in Export menu shows recent destinations
+  - Save dialogs now default to last export directory
+  - Supports all export formats with file type icons
+
+- **Undo for Destructive Actions** - 5-second undo window after deletions
+  - Toast notification appears when deleting favorites or scheduled queries
+  - Click "Undo" to restore deleted items
+  - Scheduled query results preserved until undo expires
+
+- **Template Search Ranking** - Search results sorted by relevance
+  - Title matches weighted highest (prefix matches prioritized)
+  - Query and description matches also contribute to score
+  - Multi-term searches boost results matching all terms
+
+- **Favorites Drag Reordering** - Organize favorites via drag and drop
+  - Drag handle icon for visual affordance
+  - Reorder persisted automatically
+
+## [1.5.1] - 2026-01-12
+
+### Improved
+- **Schema Browser Keyboard Navigation** - Full keyboard support for the schema browser
+  - Arrow keys to navigate tables and columns
+  - Tab/Shift+Tab to switch between panels
+  - Return to toggle table enabled state
+  - ⌘E to toggle "Enabled only" filter
+
+- **Accessibility** - Comprehensive VoiceOver support
+  - Added accessibility labels to all icons and interactive elements
+  - Screen reader support for Schema Browser, History, Favorites, Scheduled Queries
+  - Proper element grouping for better navigation
+
+- **Code Quality** - Reduced code duplication in LLM services
+  - Shared `cleanSQLResponse()` method in protocol extension
+  - Shared `HTTPStatusHandler` for HTTP error handling
+  - Centralized `AppLogger` for consistent OSLog logging
+
+### Fixed
+- **Security Hardening** - File permissions for data directories
+  - Data directories now created with 0700 permissions (owner-only access)
+  - Applies to query history, scheduled queries, and results storage
+
 ## [1.5.0] - 2026-01-12
 
 ### Added
@@ -255,6 +302,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - osquery integration via osqueryi CLI
 - AI Discovery extension written in Go
 
+[1.5.1]: https://github.com/juergen-kc/OsqueryNLI/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/juergen-kc/OsqueryNLI/compare/v1.4.2...v1.5.0
 [1.4.2]: https://github.com/juergen-kc/OsqueryNLI/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/juergen-kc/OsqueryNLI/compare/v1.4.0...v1.4.1

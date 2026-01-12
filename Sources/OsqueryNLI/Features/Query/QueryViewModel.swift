@@ -215,20 +215,30 @@ final class QueryViewModel {
     func saveToFile(content: String, defaultName: String, fileType: String) {
         let savePanel = NSSavePanel()
 
+        let exportFileType: ExportFileType
         switch fileType {
         case "json":
             savePanel.allowedContentTypes = [.json]
+            exportFileType = .json
         case "csv":
             savePanel.allowedContentTypes = [.commaSeparatedText]
+            exportFileType = .csv
         case "md":
             savePanel.allowedContentTypes = [.init(filenameExtension: "md") ?? .plainText]
+            exportFileType = .markdown
         default:
             savePanel.allowedContentTypes = [.plainText]
+            exportFileType = .json
         }
 
         savePanel.nameFieldStringValue = defaultName
         savePanel.title = "Export Results"
         savePanel.message = "Choose where to save the query results"
+
+        // Set initial directory to last export location if available
+        if let lastDir = appState.lastExportDirectory {
+            savePanel.directoryURL = URL(fileURLWithPath: lastDir)
+        }
 
         savePanel.begin { [weak self] response in
             guard let self = self else { return }
@@ -236,6 +246,7 @@ final class QueryViewModel {
                 do {
                     try content.write(to: url, atomically: true, encoding: .utf8)
                     Task { @MainActor in
+                        self.appState.recordExport(filePath: url.path, fileType: exportFileType)
                         self.showSaveSuccess("Saved to \(url.lastPathComponent)")
                     }
                 } catch {
@@ -254,12 +265,18 @@ final class QueryViewModel {
         savePanel.title = "Export Results"
         savePanel.message = "Choose where to save the Excel file"
 
+        // Set initial directory to last export location if available
+        if let lastDir = appState.lastExportDirectory {
+            savePanel.directoryURL = URL(fileURLWithPath: lastDir)
+        }
+
         savePanel.begin { [weak self] response in
             guard let self = self else { return }
             if response == .OK, let url = savePanel.url {
                 do {
                     try data.write(to: url)
                     Task { @MainActor in
+                        self.appState.recordExport(filePath: url.path, fileType: .xlsx)
                         self.showSaveSuccess("Saved to \(url.lastPathComponent)")
                     }
                 } catch {
@@ -269,6 +286,44 @@ final class QueryViewModel {
                 }
             }
         }
+    }
+
+    /// Export to a recent export location (overwrite)
+    func exportToRecentLocation(_ recentExport: RecentExport, result: QueryResult) {
+        let url = URL(fileURLWithPath: recentExport.filePath)
+
+        do {
+            switch recentExport.fileType {
+            case .json:
+                try result.toJSON().write(to: url, atomically: true, encoding: .utf8)
+            case .csv:
+                try result.toCSV().write(to: url, atomically: true, encoding: .utf8)
+            case .markdown:
+                try result.toMarkdown().write(to: url, atomically: true, encoding: .utf8)
+            case .xlsx:
+                if let data = result.toXLSX() {
+                    try data.write(to: url)
+                } else {
+                    showSaveError("Failed to generate Excel data")
+                    return
+                }
+            }
+
+            appState.recordExport(filePath: url.path, fileType: recentExport.fileType)
+            showSaveSuccess("Exported to \(url.lastPathComponent)")
+        } catch {
+            showSaveError("Failed to export: \(error.localizedDescription)")
+        }
+    }
+
+    /// Check if recent exports are available
+    var hasRecentExports: Bool {
+        !appState.recentExports.isEmpty
+    }
+
+    /// Get recent exports
+    var recentExports: [RecentExport] {
+        appState.recentExports
     }
 
     private func showSaveSuccess(_ message: String) {

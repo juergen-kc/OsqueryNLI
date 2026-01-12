@@ -23,6 +23,7 @@ struct ScheduledQueriesView: View {
             }
         }
         .frame(minWidth: 500, minHeight: 400)
+        .undoToast()
         .sheet(isPresented: $showingAddSheet) {
             AddScheduledQuerySheet()
                 .environment(appState)
@@ -46,8 +47,6 @@ struct ScheduledQueriesView: View {
             Button("Delete", role: .destructive) {
                 if let query = queryToDelete {
                     appState.removeScheduledQuery(query)
-                    // Also clear results for this query
-                    ScheduledQueryResultStore.shared.clearResults(for: query.id)
                 }
                 queryToDelete = nil
             }
@@ -56,7 +55,7 @@ struct ScheduledQueriesView: View {
             }
         } message: {
             if let query = queryToDelete {
-                Text("Are you sure you want to delete \"\(query.name)\"? This will also delete all stored results for this query.")
+                Text("Are you sure you want to delete \"\(query.name)\"? Results will be deleted when undo expires.")
             }
         }
     }

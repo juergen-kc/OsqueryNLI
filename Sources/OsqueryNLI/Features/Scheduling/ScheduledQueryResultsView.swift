@@ -62,9 +62,11 @@ struct ScheduledQueryResultsView: View {
                     loadResults()
                 }
             }
+            .help("Execute this query immediately")
 
             Button("Done") { dismiss() }
                 .keyboardShortcut(.escape)
+                .help("Close this window (Esc)")
         }
         .padding()
     }
@@ -75,6 +77,7 @@ struct ScheduledQueryResultsView: View {
             Image(systemName: "chart.line.uptrend.xyaxis")
                 .font(.system(size: 48))
                 .foregroundColor(.secondary)
+                .accessibilityHidden(true)
             Text("No Results Yet")
                 .font(.headline)
             Text("Click \"Run Now\" to execute this query and see results.")
@@ -89,10 +92,13 @@ struct ScheduledQueryResultsView: View {
                 }
             }
             .buttonStyle(.borderedProminent)
+            .help("Execute this scheduled query now")
 
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("No results yet for this scheduled query")
     }
 
     // MARK: - Latest Results Tab
@@ -130,6 +136,7 @@ struct ScheduledQueryResultsView: View {
                 Label("Alert triggered", systemImage: "bell.fill")
                     .font(.caption)
                     .foregroundColor(.orange)
+                    .accessibilityLabel("Alert was triggered for this result")
             }
 
             Spacer()
@@ -185,6 +192,7 @@ struct ScheduledQueryResultsView: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 36))
                 .foregroundColor(.red)
+                .accessibilityHidden(true)
             Text("Query Failed")
                 .font(.headline)
             if let error = result.error {
@@ -196,6 +204,8 @@ struct ScheduledQueryResultsView: View {
             }
             Spacer()
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Query failed: \(result.error ?? "Unknown error")")
     }
 
     private var noDataView: some View {
@@ -204,6 +214,7 @@ struct ScheduledQueryResultsView: View {
             Image(systemName: "tray")
                 .font(.system(size: 36))
                 .foregroundColor(.secondary)
+                .accessibilityHidden(true)
             Text("No Data")
                 .font(.headline)
             Text("This run returned no rows.")
@@ -211,6 +222,8 @@ struct ScheduledQueryResultsView: View {
                 .foregroundColor(.secondary)
             Spacer()
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("No data returned from this query run")
     }
 
     // MARK: - History Tab
@@ -254,6 +267,8 @@ struct ScheduledQueryResultsView: View {
                     AxisValueLabel(format: .dateTime.hour().minute())
                 }
             }
+            .accessibilityLabel("Chart showing result counts over time")
+            .accessibilityHint("Shows \(results.count) data points")
         }
     }
 
@@ -313,12 +328,14 @@ struct ScheduledQueryResultsView: View {
                     Image(systemName: "bell.fill")
                         .font(.caption)
                         .foregroundColor(.orange)
+                        .accessibilityHidden(true)
                 }
 
                 if result.error != nil {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.caption)
                         .foregroundColor(.red)
+                        .accessibilityHidden(true)
                 } else {
                     Text("\(result.rowCount) row\(result.rowCount == 1 ? "" : "s")")
                         .font(.caption)
@@ -328,12 +345,30 @@ struct ScheduledQueryResultsView: View {
                 Image(systemName: "chevron.right")
                     .font(.caption2)
                     .foregroundColor(.secondary)
+                    .accessibilityHidden(true)
             }
             .padding(.horizontal)
             .padding(.vertical, 8)
             .background(selectedResult?.id == result.id ? Color.accentColor.opacity(0.1) : Color.clear)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(historyRowAccessibilityLabel(result))
+            .accessibilityHint("Double tap to view details")
         }
         .buttonStyle(.plain)
+    }
+
+    private func historyRowAccessibilityLabel(_ result: ScheduledQueryResult) -> String {
+        var parts: [String] = []
+        parts.append(result.timestamp.formatted(.dateTime.month().day().hour().minute()))
+        if result.alertTriggered {
+            parts.append("alert triggered")
+        }
+        if result.error != nil {
+            parts.append("failed")
+        } else {
+            parts.append("\(result.rowCount) row\(result.rowCount == 1 ? "" : "s")")
+        }
+        return parts.joined(separator: ", ")
     }
 
     private func loadResults() {

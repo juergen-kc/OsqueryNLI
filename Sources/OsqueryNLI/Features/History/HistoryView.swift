@@ -99,6 +99,7 @@ struct HistoryView: View {
                 .font(.system(size: 48 * fontScale.scaleFactor))
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(Color.accentColor)
+                .accessibilityHidden(true)
 
             Text("No History Yet")
                 .font(.system(size: 13 * fontScale.scaleFactor, weight: .semibold))
@@ -109,6 +110,8 @@ struct HistoryView: View {
                 .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("No query history yet. Your queries will appear here.")
     }
 
     private var noResultsView: some View {
@@ -117,6 +120,7 @@ struct HistoryView: View {
                 .font(.system(size: 32 * fontScale.scaleFactor))
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
 
             Text("No Results")
                 .font(.system(size: 13 * fontScale.scaleFactor, weight: .semibold))
@@ -133,6 +137,16 @@ struct HistoryView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(noResultsAccessibilityLabel)
+    }
+
+    private var noResultsAccessibilityLabel: String {
+        if !searchText.isEmpty {
+            return "No queries match \"\(searchText)\""
+        } else {
+            return "No \(historyFilter.rawValue.lowercased()) queries found"
+        }
     }
 
     private var historyList: some View {
@@ -206,6 +220,7 @@ struct HistoryRowView: View {
         HStack(spacing: 12) {
             Image(systemName: entry.source == .mcp ? "server.rack" : "text.bubble")
                 .foregroundStyle(entry.source == .mcp ? .blue : .secondary)
+                .accessibilityLabel(entry.source == .mcp ? "MCP query" : "App query")
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {

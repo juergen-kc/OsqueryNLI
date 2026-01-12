@@ -28,6 +28,7 @@ struct FavoritesView: View {
             }
         }
         .frame(minWidth: 400, minHeight: 300)
+        .undoToast()
         .confirmationDialog(
             "Delete Favorite?",
             isPresented: Binding(
@@ -58,6 +59,7 @@ struct FavoritesView: View {
                 .font(.system(size: 48))
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(.yellow)
+                .accessibilityHidden(true)
 
             Text("No Favorites Yet")
                 .font(.headline)
@@ -69,6 +71,8 @@ struct FavoritesView: View {
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("No favorites saved yet. Run a query and click the star button to save it.")
     }
 
     private var favoritesList: some View {
@@ -85,6 +89,9 @@ struct FavoritesView: View {
                     }
                 )
             }
+            .onMove { source, destination in
+                appState.moveFavorites(from: source, to: destination)
+            }
         }
         .listStyle(.inset)
     }
@@ -98,9 +105,15 @@ struct FavoriteRowView: View {
 
     var body: some View {
         HStack(spacing: 12) {
+            Image(systemName: "line.3.horizontal")
+                .foregroundStyle(.tertiary)
+                .font(.caption)
+                .accessibilityLabel("Drag to reorder")
+
             Image(systemName: "star.fill")
                 .foregroundStyle(.yellow)
                 .font(.caption)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 if let name = favorite.name, !name.isEmpty {

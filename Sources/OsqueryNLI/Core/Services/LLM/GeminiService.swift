@@ -175,12 +175,5 @@ final class GeminiService: LLMServiceProtocol, @unchecked Sendable {
             throw error
         }
     }
-
-    private func cleanSQLResponse(_ text: String) -> String {
-        text
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "```sql", with: "")
-            .replacingOccurrences(of: "```", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
+    // Note: cleanSQLResponse is now provided by LLMServiceProtocol extension
 }

@@ -130,27 +130,13 @@ final class ClaudeService: LLMServiceProtocol, @unchecked Sendable {
                 throw LLMError.invalidResponse
             }
 
-            switch httpResponse.statusCode {
-            case 200:
-                break
-            case 401:
-                throw LLMError.invalidAPIKey
-            case 429:
-                let retryAfter = httpResponse.value(forHTTPHeaderField: "retry-after")
-                    .flatMap { Double($0) }
-                throw LLMError.rateLimited(retryAfter: retryAfter)
-            case 400...499:
-                let errorMessage = try? parseErrorMessage(from: data)
-                throw LLMError.cannotTranslate(reason: errorMessage ?? "Client error: \(httpResponse.statusCode)")
-            case 500...599:
-                throw LLMError.networkError(underlying: NSError(
-                    domain: "ClaudeService",
-                    code: httpResponse.statusCode,
-                    userInfo: [NSLocalizedDescriptionKey: "Server error: \(httpResponse.statusCode)"]
-                ))
-            default:
-                throw LLMError.invalidResponse
-            }
+            try HTTPStatusHandler.handle(
+                statusCode: httpResponse.statusCode,
+                response: httpResponse,
+                data: data,
+                serviceName: "ClaudeService",
+                parseError: { self.parseErrorMessage(from: $0) }
+            )
 
             return try parseResponse(from: data)
         }
@@ -189,20 +175,13 @@ final class ClaudeService: LLMServiceProtocol, @unchecked Sendable {
         return ClaudeResponse(text: text, tokenUsage: tokenUsage)
     }
 
-    private func parseErrorMessage(from data: Data) throws -> String? {
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+    private func parseErrorMessage(from data: Data) -> String? {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let error = json["error"] as? [String: Any],
               let message = error["message"] as? String else {
             return nil
         }
         return message
     }
-
-    private func cleanSQLResponse(_ text: String) -> String {
-        text
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "```sql", with: "")
-            .replacingOccurrences(of: "```", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
+    // Note: cleanSQLResponse is now provided by LLMServiceProtocol extension
 }

@@ -201,7 +201,7 @@ enum RetryHelper {
     }
 }
 
-/// Extension to add input validation helpers
+/// Extension to add input validation and shared utility helpers
 extension LLMServiceProtocol {
     /// Validate inputs for translateToSQL
     func validateTranslationInput(query: String, schemaContext: String) throws {
@@ -226,6 +226,56 @@ extension LLMServiceProtocol {
         }
         if trimmedSQL.isEmpty {
             throw LLMError.emptyInput(field: "SQL")
+        }
+    }
+
+    /// Clean SQL response by removing markdown code fences and trimming whitespace
+    /// This is shared across all LLM services since models often wrap SQL in markdown
+    func cleanSQLResponse(_ text: String) -> String {
+        text
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "```sql", with: "")
+            .replacingOccurrences(of: "```", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+/// Helper for handling common HTTP response status codes from LLM APIs
+enum HTTPStatusHandler {
+    /// Handle HTTP status code and throw appropriate LLMError if needed
+    /// - Parameters:
+    ///   - statusCode: HTTP status code from response
+    ///   - response: The HTTP response for extracting headers
+    ///   - data: Response data for parsing error messages
+    ///   - parseError: Closure to parse provider-specific error message from data
+    /// - Throws: LLMError for non-200 status codes
+    static func handle(
+        statusCode: Int,
+        response: HTTPURLResponse,
+        data: Data,
+        serviceName: String,
+        parseError: (Data) -> String?
+    ) throws {
+        switch statusCode {
+        case 200:
+            return // Success, no error
+        case 401:
+            throw LLMError.invalidAPIKey
+        case 429:
+            let retryAfter = response.value(forHTTPHeaderField: "retry-after")
+                .flatMap { Double($0) }
+            throw LLMError.rateLimited(retryAfter: retryAfter)
+        case 400...499:
+            let errorMessage = parseError(data)
+            throw LLMError.cannotTranslate(reason: errorMessage ?? "Client error: \(statusCode)")
+        case 500...599:
+            throw LLMError.networkError(underlying: NSError(
+                domain: serviceName,
+                code: statusCode,
+                userInfo: [NSLocalizedDescriptionKey: "Server error: \(statusCode)"]
+            ))
+        default:
+            throw LLMError.invalidResponse
         }
     }
 }

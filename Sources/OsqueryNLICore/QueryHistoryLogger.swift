@@ -1,8 +1,11 @@
 import Foundation
+import OSLog
 
 /// Utility for logging query history to a shared file accessible by both the main app and MCP server
 public final class QueryHistoryLogger: Sendable {
     public static let shared = QueryHistoryLogger()
+
+    private let logger = Logger(subsystem: "com.klaassen.OsqueryNLI", category: "History")
 
     /// Maximum number of entries to keep in history
     public let maxEntries: Int
@@ -19,8 +22,12 @@ public final class QueryHistoryLogger: Sendable {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         self.historyDirectory = appSupport.appendingPathComponent("OsqueryNLI", isDirectory: true)
         self.maxEntries = 100
-        // Ensure directory exists
-        try? FileManager.default.createDirectory(at: historyDirectory, withIntermediateDirectories: true)
+        // Ensure directory exists with owner-only permissions (0700)
+        try? FileManager.default.createDirectory(
+            at: historyDirectory,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]
+        )
     }
 
     /// Initialize with a custom directory (for testing)
@@ -30,7 +37,12 @@ public final class QueryHistoryLogger: Sendable {
     public init(directory: URL, maxEntries: Int = 100) {
         self.historyDirectory = directory
         self.maxEntries = maxEntries
-        try? FileManager.default.createDirectory(at: historyDirectory, withIntermediateDirectories: true)
+        // Create with owner-only permissions (0700)
+        try? FileManager.default.createDirectory(
+            at: historyDirectory,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]
+        )
     }
 
     /// Log a query execution
@@ -70,7 +82,7 @@ public final class QueryHistoryLogger: Sendable {
             let entries = try decoder.decode([QueryHistoryEntry].self, from: data)
             return entries.sorted { $0.timestamp > $1.timestamp }
         } catch {
-            print("Failed to read history entries: \(error)")
+            logger.error("Failed to read history entries: \(error.localizedDescription)")
             return []
         }
     }
@@ -119,7 +131,7 @@ public final class QueryHistoryLogger: Sendable {
             let data = try encoder.encode(entries)
             try data.write(to: historyFileURL, options: .atomic)
         } catch {
-            print("Failed to write history entries: \(error)")
+            logger.error("Failed to write history entries: \(error.localizedDescription)")
         }
     }
 }

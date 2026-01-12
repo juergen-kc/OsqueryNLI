@@ -608,6 +608,29 @@ struct QueryView: View {
                                         Label("Save as Excel...", systemImage: "square.and.arrow.down")
                                     }
                                 }
+
+                                if vm.hasRecentExports {
+                                    Divider()
+
+                                    Section("Export Again") {
+                                        ForEach(vm.recentExports) { export in
+                                            Button {
+                                                vm.exportToRecentLocation(export, result: result)
+                                            } label: {
+                                                Label {
+                                                    VStack(alignment: .leading) {
+                                                        Text(export.fileName)
+                                                        Text(export.directoryPath)
+                                                            .font(.caption2)
+                                                            .foregroundStyle(.secondary)
+                                                    }
+                                                } icon: {
+                                                    Image(systemName: export.fileType.icon)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             } label: {
                                 Label("Export", systemImage: "square.and.arrow.up")
                                     .font(.caption)

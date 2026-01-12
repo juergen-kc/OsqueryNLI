@@ -1,8 +1,10 @@
 import Foundation
+import OSLog
 
 /// Persistent storage for scheduled query results
 /// Note: @unchecked Sendable is safe because all mutable state is protected by `lock`
 final class ScheduledQueryResultStore: @unchecked Sendable {
+    private let logger = AppLogger.scheduler
     static let shared = ScheduledQueryResultStore()
 
     private let dataDirectory: URL
@@ -24,26 +26,27 @@ final class ScheduledQueryResultStore: @unchecked Sendable {
         ensureDirectoryExists()
     }
 
-    /// Ensure the data directory exists
+    /// Ensure the data directory exists with secure permissions
     private func ensureDirectoryExists() {
         do {
             if !FileManager.default.fileExists(atPath: dataDirectory.path) {
+                // Create directory with owner-only permissions (0700)
                 try FileManager.default.createDirectory(
                     at: dataDirectory,
                     withIntermediateDirectories: true,
-                    attributes: nil
+                    attributes: [.posixPermissions: 0o700]
                 )
-                print("[ScheduledQueryResultStore] Created data directory: \(dataDirectory.path)")
+                logger.info("Created data directory: \(self.dataDirectory.path)")
             }
         } catch {
-            print("[ScheduledQueryResultStore] Failed to create directory: \(error)")
+            logger.error("Failed to create directory: \(error.localizedDescription)")
         }
     }
 
     /// Save a new result
     func saveResult(_ result: ScheduledQueryResult) {
         lock.withLock {
-            print("[ScheduledQueryResultStore] saveResult called for query \(result.scheduledQueryId), rows: \(result.rowCount)")
+            logger.debug("saveResult called for query \(result.scheduledQueryId), rows: \(result.rowCount)")
 
             // Ensure directory exists before saving
             ensureDirectoryExists()
@@ -62,9 +65,9 @@ final class ScheduledQueryResultStore: @unchecked Sendable {
     func getResults(for queryId: UUID, limit: Int = 20) -> [ScheduledQueryResult] {
         lock.withLock {
             let allResults = loadAllResultsUnsafe()
-            print("[ScheduledQueryResultStore] getResults for \(queryId): found \(allResults.count) total results")
+            logger.debug("getResults for \(queryId): found \(allResults.count) total results")
             let filtered = allResults.filter { $0.scheduledQueryId == queryId }
-            print("[ScheduledQueryResultStore] getResults for \(queryId): \(filtered.count) matching results")
+            logger.debug("getResults for \(queryId): \(filtered.count) matching results")
             return filtered
                 .sorted { $0.timestamp > $1.timestamp }
                 .prefix(limit)
@@ -98,20 +101,20 @@ final class ScheduledQueryResultStore: @unchecked Sendable {
     private func loadAllResultsUnsafe() -> [ScheduledQueryResult] {
         let path = resultsFileURL.path
         guard FileManager.default.fileExists(atPath: path) else {
-            print("[ScheduledQueryResultStore] No results file exists at \(path)")
+            logger.debug("No results file exists at \(path)")
             return []
         }
 
         do {
             let data = try Data(contentsOf: resultsFileURL)
-            print("[ScheduledQueryResultStore] Loaded \(data.count) bytes from \(path)")
+            logger.debug("Loaded \(data.count) bytes from \(path)")
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
             let results = try decoder.decode([ScheduledQueryResult].self, from: data)
-            print("[ScheduledQueryResultStore] Decoded \(results.count) results")
+            logger.debug("Decoded \(results.count) results")
             return results
         } catch {
-            print("[ScheduledQueryResultStore] Failed to load scheduled results: \(error)")
+            logger.error("Failed to load scheduled results: \(error.localizedDescription)")
             return []
         }
     }
@@ -122,20 +125,20 @@ final class ScheduledQueryResultStore: @unchecked Sendable {
             encoder.dateEncodingStrategy = .iso8601
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let data = try encoder.encode(results)
-            print("[ScheduledQueryResultStore] Encoding \(results.count) results (\(data.count) bytes)")
+            logger.debug("Encoding \(results.count) results (\(data.count) bytes)")
             try data.write(to: resultsFileURL, options: .atomic)
-            print("[ScheduledQueryResultStore] Saved to \(resultsFileURL.path)")
+            logger.debug("Saved to \(self.resultsFileURL.path)")
 
             // Verify the write
             if FileManager.default.fileExists(atPath: resultsFileURL.path) {
                 let attrs = try? FileManager.default.attributesOfItem(atPath: resultsFileURL.path)
                 let size = attrs?[.size] as? Int ?? 0
-                print("[ScheduledQueryResultStore] Verified file exists, size: \(size) bytes")
+                logger.debug("Verified file exists, size: \(size) bytes")
             } else {
-                print("[ScheduledQueryResultStore] WARNING: File does not exist after save!")
+                logger.warning("File does not exist after save!")
             }
         } catch {
-            print("[ScheduledQueryResultStore] Failed to save scheduled results: \(error)")
+            logger.error("Failed to save scheduled results: \(error.localizedDescription)")
         }
     }
 

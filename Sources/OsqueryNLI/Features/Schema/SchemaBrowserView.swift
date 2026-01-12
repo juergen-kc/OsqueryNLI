@@ -4,6 +4,7 @@ import SwiftUI
 struct SchemaBrowserView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.fontScale) private var fontScale
+    @FocusState private var focusedPanel: Panel?
 
     @State private var searchText: String = ""
     @State private var selectedTable: String?
@@ -12,6 +13,12 @@ struct SchemaBrowserView: View {
     @State private var allTables: [String] = []
     @State private var isLoadingTables: Bool = true
     @State private var showEnabledOnly: Bool = false
+    @State private var selectedColumnIndex: Int?
+
+    enum Panel: Hashable {
+        case tableList
+        case columnDetails
+    }
 
     /// Represents a column in a table
     struct ColumnInfoItem: Identifiable {
@@ -25,14 +32,91 @@ struct SchemaBrowserView: View {
             // Left panel - Table list
             tableListPanel
                 .frame(minWidth: 200, idealWidth: 250, maxWidth: 350)
+                .focused($focusedPanel, equals: .tableList)
 
             // Right panel - Column details
             columnDetailsPanel
                 .frame(minWidth: 300)
+                .focused($focusedPanel, equals: .columnDetails)
         }
         .frame(minWidth: 600, minHeight: 400)
         .task {
             await loadTables()
+            focusedPanel = .tableList
+        }
+        // Keyboard navigation
+        .onKeyPress(.upArrow) {
+            handleUpArrow()
+            return .handled
+        }
+        .onKeyPress(.downArrow) {
+            handleDownArrow()
+            return .handled
+        }
+        .onKeyPress(.leftArrow) {
+            focusedPanel = .tableList
+            return .handled
+        }
+        .onKeyPress(.rightArrow) {
+            if selectedTable != nil {
+                focusedPanel = .columnDetails
+            }
+            return .handled
+        }
+        .onKeyPress(.return) {
+            if focusedPanel == .tableList, let table = selectedTable {
+                appState.toggleTable(table)
+            }
+            return .handled
+        }
+        .onKeyPress(characters: CharacterSet(charactersIn: "eE")) { press in
+            if press.modifiers.contains(.command) {
+                showEnabledOnly.toggle()
+                return .handled
+            }
+            return .ignored
+        }
+    }
+
+    // MARK: - Keyboard Navigation
+
+    private func handleUpArrow() {
+        if focusedPanel == .tableList {
+            navigateTableList(direction: -1)
+        } else if focusedPanel == .columnDetails {
+            navigateColumnList(direction: -1)
+        }
+    }
+
+    private func handleDownArrow() {
+        if focusedPanel == .tableList {
+            navigateTableList(direction: 1)
+        } else if focusedPanel == .columnDetails {
+            navigateColumnList(direction: 1)
+        }
+    }
+
+    private func navigateTableList(direction: Int) {
+        let tables = filteredTables
+        guard !tables.isEmpty else { return }
+
+        if let current = selectedTable, let currentIndex = tables.firstIndex(of: current) {
+            let newIndex = max(0, min(tables.count - 1, currentIndex + direction))
+            selectTable(tables[newIndex])
+        } else {
+            // Select first or last based on direction
+            selectTable(direction > 0 ? tables.first! : tables.last!)
+        }
+    }
+
+    private func navigateColumnList(direction: Int) {
+        guard !columnInfos.isEmpty else { return }
+
+        if let current = selectedColumnIndex {
+            let newIndex = max(0, min(columnInfos.count - 1, current + direction))
+            selectedColumnIndex = newIndex
+        } else {
+            selectedColumnIndex = direction > 0 ? 0 : columnInfos.count - 1
         }
     }
 
@@ -64,10 +148,13 @@ struct SchemaBrowserView: View {
                 Toggle("Enabled only", isOn: $showEnabledOnly)
                     .toggleStyle(.checkbox)
                     .font(.caption)
+                    .help("Toggle with ⌘E")
+                    .accessibilityLabel("Show enabled tables only")
                 Spacer()
                 Text("\(filteredTables.count) tables")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .accessibilityLabel("\(filteredTables.count) tables displayed")
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -157,6 +244,8 @@ struct SchemaBrowserView: View {
                         .font(.caption)
                     }
                     .buttonStyle(.bordered)
+                    .help(appState.enabledTables.contains(table) ? "Disable this table (Return)" : "Enable this table (Return)")
+                    .accessibilityLabel(appState.enabledTables.contains(table) ? "Table enabled, press to disable" : "Table disabled, press to enable")
 
                     // Copy schema button
                     Button(action: {
@@ -188,10 +277,13 @@ struct SchemaBrowserView: View {
                         Image(systemName: "tablecells")
                             .font(.largeTitle)
                             .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
                         Text("No columns found")
                             .foregroundStyle(.secondary)
                         Spacer()
                     }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("No columns found for this table")
                 } else {
                     // Column list using ScrollView + LazyVStack for compatibility
                     ScrollView {
@@ -216,12 +308,13 @@ struct SchemaBrowserView: View {
 
                             Divider()
 
-                            ForEach(columnInfos) { column in
+                            ForEach(Array(columnInfos.enumerated()), id: \.element.id) { index, column in
                                 HStack {
                                     HStack(spacing: 6) {
                                         Image(systemName: iconForType(column.type))
                                             .foregroundStyle(.secondary)
                                             .font(.caption)
+                                            .accessibilityHidden(true)
                                         Text(column.name)
                                             .font(.system(.body, design: .monospaced))
                                     }
@@ -236,6 +329,9 @@ struct SchemaBrowserView: View {
                                 }
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
+                                .background(selectedColumnIndex == index && focusedPanel == .columnDetails ? Color.accentColor.opacity(0.2) : Color.clear)
+                                .accessibilityElement(children: .combine)
+                                .accessibilityLabel("\(column.name), type \(column.type)")
 
                                 Divider()
                                     .padding(.leading, 12)
@@ -249,14 +345,20 @@ struct SchemaBrowserView: View {
                     Image(systemName: "tablecells")
                         .font(.system(size: 48))
                         .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
                     Text("Select a table")
                         .font(.headline)
                         .foregroundStyle(.secondary)
                     Text("Choose a table from the list to view its columns")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
+                    Text("Use ↑↓ to navigate, ← → to switch panels")
+                        .font(.caption2)
+                        .foregroundStyle(.quaternary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("No table selected. Use arrow keys to navigate the table list.")
             }
         }
         .background(Color(nsColor: .controlBackgroundColor))
@@ -290,6 +392,7 @@ struct SchemaBrowserView: View {
 
     private func selectTable(_ table: String) {
         selectedTable = table
+        selectedColumnIndex = nil
         loadColumns(for: table)
     }
 
@@ -411,6 +514,7 @@ private struct TableRowView: View {
             Image(systemName: isAITable ? "cpu" : "tablecells")
                 .foregroundStyle(isAITable ? .purple : .secondary)
                 .frame(width: 20)
+                .accessibilityHidden(true)
 
             // Table name
             Text(table)
@@ -424,11 +528,15 @@ private struct TableRowView: View {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
                     .font(.caption)
+                    .accessibilityHidden(true)
             }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(table)\(isAITable ? ", AI Discovery table" : "")\(isEnabled ? ", enabled" : "")")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
