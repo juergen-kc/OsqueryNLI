@@ -75,6 +75,11 @@ swift build -c release
 .build/release/OsqueryNLI
 ```
 
+## Documentation
+
+- **[User Guide](docs/USER_GUIDE.md)** - Comprehensive guide to all features
+- **[MCP Server API](docs/MCP_API.md)** - API documentation for AI assistant integration
+
 ## Setup
 
 1. **Install osquery** (if not already installed):
