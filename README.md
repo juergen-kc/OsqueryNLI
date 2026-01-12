@@ -1,5 +1,9 @@
 # Osquery NLI
 
+[![GitHub release](https://img.shields.io/github/v/release/juergen-kc/OsqueryNLI)](https://github.com/juergen-kc/OsqueryNLI/releases)
+[![macOS](https://img.shields.io/badge/macOS-14.0+-blue)](https://github.com/juergen-kc/OsqueryNLI)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 **Natural Language Interface for Osquery** - Ask questions about your Mac in plain English
 
 Osquery NLI is a macOS menu bar app that lets you query your system using natural language instead of SQL. It uses AI (Gemini, Claude, or GPT) to translate your questions into osquery SQL and presents the results in a user-friendly format.
@@ -8,15 +12,29 @@ Osquery NLI is a macOS menu bar app that lets you query your system using natura
 
 ## Features
 
+### Core Features
 - **Natural Language Queries** - Ask questions like "What apps start at login?" or "Which processes are using the most memory?"
 - **Multiple AI Providers** - Choose between Google Gemini, Anthropic Claude, or OpenAI GPT
-- **AI Discovery Tables** - Custom osquery extension to discover AI tools, MCP servers, browser extensions, and more
+- **AI Discovery Tables** - Custom osquery extension with 10 tables to discover AI tools, MCP servers, models, and more
 - **Query Templates** - Pre-built templates for common queries across system, network, security, and AI categories
-- **Query History** - Track and rerun previous queries
-- **Favorites** - Save frequently used queries for quick access
-- **Export Results** - Export query results to JSON, CSV, Markdown, or Excel
-- **MCP Server** - Built-in Model Context Protocol server for integration with AI assistants
+- **Schema Browser** - Browse and search osquery tables with full keyboard navigation
+
+### Organization & Productivity
+- **Query History** - Track and rerun previous queries with search and filtering
+- **Favorites** - Save frequently used queries with drag-and-drop reordering
+- **Scheduled Queries** - Run queries automatically at configurable intervals
+- **Notifications & Alerts** - Get notified when query results match conditions
+
+### Export & Integration
+- **Export Results** - Export to JSON, CSV, Markdown, or Excel with recent exports quick access
+- **MCP Server** - Built-in Model Context Protocol server for Claude Desktop, Cursor, and other AI assistants
+- **Siri Shortcuts** - Run queries via Shortcuts app automation
+
+### User Experience
 - **Menu Bar App** - Lightweight, always-accessible from the menu bar
+- **Keyboard Shortcuts** - Full keyboard navigation and shortcuts
+- **Accessibility** - VoiceOver support throughout the app
+- **Undo Support** - 5-second undo window for destructive actions
 
 ## Requirements
 
@@ -121,7 +139,7 @@ Click "Browse Templates" to access pre-built queries organized by category:
 
 ## AI Discovery Extension
 
-Osquery NLI includes a custom osquery extension that adds 7 tables for discovering AI tools and configurations:
+Osquery NLI includes a custom osquery extension that adds 10 tables for discovering AI tools and configurations:
 
 | Table | Description |
 |-------|-------------|
@@ -132,6 +150,9 @@ Osquery NLI includes a custom osquery extension that adds 7 tables for discoveri
 | `ai_code_assistants` | Code assistant configurations (Copilot, Continue, Cody, etc.) |
 | `ai_api_keys` | Configured AI API keys (presence only, not values) |
 | `ai_local_servers` | Local AI servers (Ollama, LM Studio, LocalAI, etc.) |
+| `ai_models_downloaded` | Downloaded AI models (Ollama, LM Studio, HuggingFace cache) |
+| `ai_containers` | AI-related Docker containers |
+| `ai_sdk_dependencies` | AI SDK dependencies in project files |
 
 The extension is bundled with the app and loads automatically - no additional setup required.
 
@@ -276,7 +297,7 @@ cp ai_tables.ext ../OsqueryNLI_Swift/Resources/
 
 ### AI Discovery Extension Tables
 
-The extension provides 7 virtual tables:
+The extension provides 10 virtual tables:
 
 **ai_tools_installed** - Discovers installed AI tools
 - Scans `/Applications` for known AI apps
@@ -312,6 +333,23 @@ The extension provides 7 virtual tables:
 **ai_local_servers** - Detects local AI servers
 - Ollama, LM Studio, LocalAI, llama.cpp, vLLM
 - Returns: name, service_type, pid, port, status, endpoint, model_loaded, version
+
+**ai_models_downloaded** - Discovers downloaded AI models
+- Scans Ollama models directory
+- Scans LM Studio models directory
+- Scans HuggingFace cache
+- Returns: name, source, path, size, format, quantization, modified_time
+
+**ai_containers** - Detects AI-related Docker containers
+- Identifies containers running AI workloads
+- Detects Ollama, LocalAI, vLLM, text-generation-inference
+- Returns: container_id, name, image, status, ports, gpu_enabled, created
+
+**ai_sdk_dependencies** - Finds AI SDK dependencies in projects
+- Scans package.json for npm packages
+- Scans requirements.txt for Python packages
+- Scans go.mod for Go modules
+- Returns: name, version, package_manager, project_path, sdk_type
 
 ## Troubleshooting
 
@@ -373,6 +411,24 @@ pgrep osqueryd
 - **No Telemetry**: The app doesn't collect or send any usage data
 
 ## Version History
+
+### 1.5.2
+- Undo support for destructive actions (5-second undo window)
+- Template search ranking by relevance
+- Favorites drag-and-drop reordering
+- Recent exports quick access from Export menu
+
+### 1.5.1
+- Full keyboard navigation throughout the app
+- Comprehensive accessibility labels for VoiceOver
+- Improved test coverage (120 tests)
+
+### 1.5.0
+- Scheduled queries with configurable intervals
+- Notifications and alerts when query results match conditions
+- 3 new AI Discovery tables (ai_models_downloaded, ai_containers, ai_sdk_dependencies)
+- Schema browser with search and full keyboard navigation
+- Markdown export format
 
 ### 1.0.4
 - MCP server improvements and bug fixes
