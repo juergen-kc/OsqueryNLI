@@ -320,4 +320,182 @@ struct OsqueryServiceTests {
             #expect(service.aiDiscoveryEnabled == false)
         }
     }
+
+    // MARK: - Advanced SQL Validation Tests
+
+    @Suite("Advanced SQL Validation")
+    struct AdvancedSQLValidationTests {
+        let service = OsqueryService()
+
+        @Test("Accepts COUNT aggregate")
+        func testCountAggregate() throws {
+            try service.validateSQL("SELECT COUNT(*) FROM processes")
+        }
+
+        @Test("Accepts GROUP BY")
+        func testGroupBy() throws {
+            try service.validateSQL("SELECT uid, COUNT(*) FROM processes GROUP BY uid")
+        }
+
+        @Test("Accepts ORDER BY")
+        func testOrderBy() throws {
+            try service.validateSQL("SELECT * FROM processes ORDER BY pid DESC")
+        }
+
+        @Test("Accepts LIMIT")
+        func testLimit() throws {
+            try service.validateSQL("SELECT * FROM processes LIMIT 10")
+        }
+
+        @Test("Accepts LIMIT with OFFSET")
+        func testLimitOffset() throws {
+            try service.validateSQL("SELECT * FROM processes LIMIT 10 OFFSET 5")
+        }
+
+        @Test("Accepts subquery")
+        func testSubquery() throws {
+            try service.validateSQL("SELECT * FROM processes WHERE uid IN (SELECT uid FROM users)")
+        }
+
+        @Test("Accepts UNION")
+        func testUnion() throws {
+            try service.validateSQL("SELECT name FROM processes UNION SELECT name FROM listening_ports")
+        }
+
+        @Test("Accepts LIKE operator")
+        func testLikeOperator() throws {
+            try service.validateSQL("SELECT * FROM processes WHERE name LIKE '%chrome%'")
+        }
+
+        @Test("Accepts IN clause")
+        func testInClause() throws {
+            try service.validateSQL("SELECT * FROM users WHERE uid IN (0, 501, 502)")
+        }
+
+        @Test("Accepts BETWEEN")
+        func testBetween() throws {
+            try service.validateSQL("SELECT * FROM processes WHERE pid BETWEEN 1 AND 1000")
+        }
+
+        @Test("Accepts IS NULL")
+        func testIsNull() throws {
+            try service.validateSQL("SELECT * FROM processes WHERE parent IS NULL")
+        }
+
+        @Test("Accepts IS NOT NULL")
+        func testIsNotNull() throws {
+            try service.validateSQL("SELECT * FROM users WHERE shell IS NOT NULL")
+        }
+
+        @Test("Accepts multiple JOINs")
+        func testMultipleJoins() throws {
+            // Single line to avoid newline rejection
+            try service.validateSQL("SELECT p.name, u.username FROM processes p JOIN users u ON p.uid = u.uid JOIN groups g ON u.gid = g.gid")
+        }
+
+        @Test("Accepts LEFT JOIN")
+        func testLeftJoin() throws {
+            try service.validateSQL("SELECT * FROM users u LEFT JOIN processes p ON u.uid = p.uid")
+        }
+
+        @Test("Accepts DISTINCT")
+        func testDistinct() throws {
+            try service.validateSQL("SELECT DISTINCT uid FROM processes")
+        }
+
+        @Test("Accepts aliased columns")
+        func testAliasedColumns() throws {
+            try service.validateSQL("SELECT name AS process_name, pid AS process_id FROM processes")
+        }
+
+        @Test("Rejects ALTER TABLE")
+        func testRejectAlter() {
+            #expect(throws: OsqueryError.self) {
+                try service.validateSQL("ALTER TABLE users ADD COLUMN test TEXT")
+            }
+        }
+
+        @Test("Rejects CREATE TABLE")
+        func testRejectCreate() {
+            #expect(throws: OsqueryError.self) {
+                try service.validateSQL("CREATE TABLE test (id INT)")
+            }
+        }
+
+        @Test("Rejects TRUNCATE")
+        func testRejectTruncate() {
+            #expect(throws: OsqueryError.self) {
+                try service.validateSQL("TRUNCATE TABLE users")
+            }
+        }
+
+        @Test("Allows semicolon (valid in osquery)")
+        func testAllowsSemicolon() throws {
+            // Note: osquery allows multiple statements separated by ;
+            try service.validateSQL("SELECT * FROM users; SELECT * FROM processes")
+        }
+
+        @Test("Allows comment with -- (valid SQL)")
+        func testAllowsDashComment() throws {
+            // SQL comments are valid
+            try service.validateSQL("SELECT * FROM users -- comment")
+        }
+
+        @Test("Allows single quotes in strings")
+        func testSingleQuotesInStrings() throws {
+            try service.validateSQL("SELECT * FROM users WHERE name = 'O''Brien'")
+        }
+
+        @Test("Accepts CASE WHEN on single line")
+        func testCaseWhen() throws {
+            // Multiline is rejected (newlines), but single line works
+            try service.validateSQL("SELECT name, CASE WHEN uid = 0 THEN 'root' ELSE 'user' END as type FROM users")
+        }
+
+        @Test("Accepts COALESCE")
+        func testCoalesce() throws {
+            try service.validateSQL("SELECT COALESCE(shell, '/bin/false') FROM users")
+        }
+
+        @Test("Rejects multiline query (newlines)")
+        func testRejectsMultiline() {
+            #expect(throws: OsqueryError.self) {
+                try service.validateSQL("SELECT *\nFROM users")
+            }
+        }
+    }
+
+    // MARK: - Error Message Tests
+
+    @Suite("Error Messages")
+    struct ErrorMessageTests {
+        let service = OsqueryService()
+
+        @Test("Empty query error is descriptive")
+        func testEmptyQueryError() {
+            do {
+                try service.validateSQL("")
+                Issue.record("Should have thrown")
+            } catch let error as OsqueryError {
+                let message = error.localizedDescription
+                #expect(message.contains("empty") || message.contains("Empty"))
+            } catch {
+                Issue.record("Wrong error type: \(error)")
+            }
+        }
+
+        @Test("INSERT rejection throws OsqueryError")
+        func testInsertErrorMessage() {
+            do {
+                try service.validateSQL("INSERT INTO users VALUES (1)")
+                Issue.record("Should have thrown")
+            } catch let error as OsqueryError {
+                // Error message varies - just verify it threw an OsqueryError
+                let message = error.localizedDescription
+                #expect(!message.isEmpty)
+            } catch {
+                Issue.record("Wrong error type: \(error)")
+            }
+        }
+    }
 }

@@ -154,4 +154,126 @@ struct ProcessRunnerTests {
             #expect(Bool(false), "Unexpected error: \(error)")
         }
     }
+
+    // MARK: - Additional Edge Case Tests
+
+    @Test("ProcessRunner handles empty arguments")
+    func testProcessRunnerEmptyArguments() async throws {
+        let runner = ProcessRunner()
+        let result = try await runner.run(executable: "/bin/pwd", arguments: [])
+
+        #expect(result.exitCode == 0)
+        #expect(result.stdoutString?.isEmpty == false)
+    }
+
+    @Test("ProcessRunner handles arguments with spaces")
+    func testProcessRunnerArgumentsWithSpaces() async throws {
+        let runner = ProcessRunner()
+        let result = try await runner.run(
+            executable: "/bin/echo",
+            arguments: ["hello world", "foo bar"]
+        )
+
+        #expect(result.exitCode == 0)
+        #expect(result.stdoutString?.contains("hello world") == true)
+        #expect(result.stdoutString?.contains("foo bar") == true)
+    }
+
+    @Test("ProcessRunner handles special characters in arguments")
+    func testProcessRunnerSpecialCharacters() async throws {
+        let runner = ProcessRunner()
+        let result = try await runner.run(
+            executable: "/bin/echo",
+            arguments: ["$HOME", "\"quoted\"", "'single'"]
+        )
+
+        #expect(result.exitCode == 0)
+        // Echo should output the literal strings (not expand $HOME)
+        #expect(result.stdoutString?.contains("$HOME") == true)
+    }
+
+    @Test("ProcessRunner handles large output")
+    func testProcessRunnerLargeOutput() async throws {
+        let runner = ProcessRunner()
+        // Generate 1000 lines of output
+        let result = try await runner.run(
+            executable: "/bin/sh",
+            arguments: ["-c", "for i in $(seq 1 1000); do echo line$i; done"]
+        )
+
+        #expect(result.exitCode == 0)
+        let lines = result.stdoutString?.components(separatedBy: "\n").filter { !$0.isEmpty }
+        #expect(lines?.count == 1000)
+    }
+
+    @Test("ProcessRunner handles binary in stdout")
+    func testProcessRunnerBinaryOutput() async throws {
+        let runner = ProcessRunner()
+        // Generate some binary-ish data (null bytes)
+        let result = try await runner.run(
+            executable: "/bin/sh",
+            arguments: ["-c", "printf 'hello\\x00world'"]
+        )
+
+        #expect(result.exitCode == 0)
+        #expect(result.stdout.count > 0)
+    }
+
+    @Test("ProcessRunner handles environment correctly")
+    func testProcessRunnerEnvironment() async throws {
+        let runner = ProcessRunner()
+        let result = try await runner.run(
+            executable: "/bin/sh",
+            arguments: ["-c", "echo $PATH"]
+        )
+
+        #expect(result.exitCode == 0)
+        // Should have some PATH value
+        #expect(result.stdoutString?.isEmpty == false)
+    }
+
+    @Test("ProcessResult with both stdout and stderr")
+    func testProcessResultBothOutputs() async throws {
+        let runner = ProcessRunner()
+        let result = try await runner.run(
+            executable: "/bin/sh",
+            arguments: ["-c", "echo stdout; echo stderr >&2"]
+        )
+
+        #expect(result.stdoutString?.contains("stdout") == true)
+        #expect(result.stderrString?.contains("stderr") == true)
+    }
+
+    @Test("ProcessRunner handles rapid sequential calls")
+    func testProcessRunnerSequentialCalls() async throws {
+        let runner = ProcessRunner()
+
+        for i in 1...10 {
+            let result = try await runner.run(
+                executable: "/bin/echo",
+                arguments: ["\(i)"]
+            )
+            #expect(result.exitCode == 0)
+            #expect(result.stdoutString?.trimmingCharacters(in: .whitespacesAndNewlines) == "\(i)")
+        }
+    }
+
+    @Test("ProcessError cases are distinct")
+    func testProcessErrorCasesDistinct() {
+        let notFound = ProcessRunner.ProcessError.notFound(path: "/test")
+        let timeout = ProcessRunner.ProcessError.timeout
+        let cancelled = ProcessRunner.ProcessError.cancelled
+        let failed = ProcessRunner.ProcessError.executionFailed(exitCode: 1, stderr: "error")
+
+        // Each should have unique descriptions
+        let descriptions = [
+            notFound.errorDescription ?? "",
+            timeout.errorDescription ?? "",
+            cancelled.errorDescription ?? "",
+            failed.errorDescription ?? ""
+        ]
+
+        let uniqueDescriptions = Set(descriptions)
+        #expect(uniqueDescriptions.count == 4)
+    }
 }
