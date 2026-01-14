@@ -3,20 +3,28 @@ import MCP
 import OsqueryNLICore
 import GoogleGenerativeAI
 
-// MARK: - Ensure stdout is unbuffered for MCP communication
-private func setupUnbufferedOutput() {
-    setbuf(stdout, nil)
+// MARK: - Helpers (wrapped to avoid top-level code conflict with @main)
+enum MCPHelpers {
+    // Ensure stdout is unbuffered for MCP communication
+    static func setupUnbufferedOutput() {
+        setbuf(stdout, nil)
+    }
+
+    // Debug Logging (to stderr, won't interfere with MCP)
+    static let debugMode = ProcessInfo.processInfo.environment["OSQUERY_MCP_DEBUG"] != nil
+
+    static func debugLog(_ message: String) {
+        guard debugMode else { return }
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+        fputs("[\(timestamp)] \(message)\n", stderr)
+        fflush(stderr)
+    }
 }
 
-// MARK: - Debug Logging (to stderr, won't interfere with MCP)
-private let debugMode = ProcessInfo.processInfo.environment["OSQUERY_MCP_DEBUG"] != nil
-
-private func debugLog(_ message: String) {
-    guard debugMode else { return }
-    let timestamp = ISO8601DateFormatter().string(from: Date())
-    fputs("[\(timestamp)] \(message)\n", stderr)
-    fflush(stderr)
-}
+// Convenience aliases
+private func setupUnbufferedOutput() { MCPHelpers.setupUnbufferedOutput() }
+private var debugMode: Bool { MCPHelpers.debugMode }
+private func debugLog(_ message: String) { MCPHelpers.debugLog(message) }
 
 // MARK: - LLM Translation Service
 
@@ -468,7 +476,7 @@ struct OsqueryMCPServer {
 
         let server = Server(
             name: "osquery",
-            version: "1.3.0"
+            version: "1.4.0"
         )
 
         // MARK: - Register Tools
@@ -601,6 +609,50 @@ struct OsqueryMCPServer {
                             ]
                         ],
                         "required": ["table"]
+                    ]
+                ),
+                Tool(
+                    name: "osquery_favorites",
+                    description: "List all saved favorite queries from OsqueryNLI. Favorites can be SQL or natural language queries.",
+                    inputSchema: [
+                        "type": "object",
+                        "properties": [:]
+                    ]
+                ),
+                Tool(
+                    name: "osquery_run_favorite",
+                    description: "Run a saved favorite query by name. Searches favorites by name (case-insensitive partial match).",
+                    inputSchema: [
+                        "type": "object",
+                        "properties": [
+                            "name": [
+                                "type": "string",
+                                "description": "Name of the favorite to run (partial match supported)"
+                            ]
+                        ],
+                        "required": ["name"]
+                    ]
+                ),
+                Tool(
+                    name: "osquery_system_info",
+                    description: "Get comprehensive system information including OS version, uptime, hostname, CPU, and memory.",
+                    inputSchema: [
+                        "type": "object",
+                        "properties": [:]
+                    ]
+                ),
+                Tool(
+                    name: "osquery_check_process",
+                    description: "Check if a specific process or application is running. Returns boolean result with process details if found.",
+                    inputSchema: [
+                        "type": "object",
+                        "properties": [
+                            "name": [
+                                "type": "string",
+                                "description": "Process or application name to check (e.g., 'Safari', 'Chrome', 'python')"
+                            ]
+                        ],
+                        "required": ["name"]
                     ]
                 )
             ])
@@ -1037,6 +1089,202 @@ struct OsqueryMCPServer {
                     response += "\n**Tables with examples:** \(availableTables.joined(separator: ", "))"
 
                     return CallTool.Result(content: [.text(response)])
+                }
+
+            case "osquery_favorites":
+                let favorites = FavoritesStore.shared.readFavorites()
+
+                if favorites.isEmpty {
+                    return CallTool.Result(content: [.text("No saved favorites found. Add favorites in the OsqueryNLI app.")])
+                }
+
+                var response = "**Saved Favorites** (\(favorites.count) total)\n\n"
+
+                let dateFormatter = ISO8601DateFormatter()
+                for (index, favorite) in favorites.enumerated() {
+                    let created = dateFormatter.string(from: favorite.createdAt)
+                    response += "\(index + 1). **\(favorite.displayName)**\n"
+                    response += "   Query: `\(favorite.query.prefix(100))\(favorite.query.count > 100 ? "..." : "")`\n"
+                    response += "   Created: \(created)\n\n"
+                }
+
+                response += "Use `osquery_run_favorite` with a name to execute a favorite."
+                return CallTool.Result(content: [.text(response)])
+
+            case "osquery_run_favorite":
+                guard let name = params.arguments?["name"]?.stringValue else {
+                    return CallTool.Result(content: [.text("Error: Missing 'name' parameter")], isError: true)
+                }
+
+                guard let favorite = FavoritesStore.shared.findFavorite(byName: name) else {
+                    let favorites = FavoritesStore.shared.readFavorites()
+                    if favorites.isEmpty {
+                        return CallTool.Result(content: [.text("Error: No favorites found. Add favorites in the OsqueryNLI app.")], isError: true)
+                    }
+                    let names = favorites.map { $0.displayName }.joined(separator: ", ")
+                    return CallTool.Result(content: [.text("Error: No favorite matching '\(name)'. Available: \(names)")], isError: true)
+                }
+
+                let query = favorite.query
+
+                // Check if it looks like SQL
+                let isSQL = query.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .uppercased()
+                    .hasPrefix("SELECT") ||
+                    query.uppercased().hasPrefix("PRAGMA")
+
+                debugLog("Running favorite '\(favorite.displayName)': \(query)")
+
+                do {
+                    var results: [[String: Any]]
+
+                    if isSQL {
+                        // Direct SQL execution
+                        results = try await osquery.execute(query)
+                    } else {
+                        // Natural language - needs LLM translation
+                        guard sharedTranslator.isAvailable else {
+                            return CallTool.Result(content: [.text("""
+                                Error: This favorite contains a natural language query which requires an API key.
+                                Set GEMINI_API_KEY environment variable or configure in OsqueryNLI app.
+                                """)], isError: true)
+                        }
+
+                        let nlResult = try await sharedTranslator.translateAndExecute(question: query, summarize: false)
+                        results = nlResult.results.map { row in
+                            row.mapValues { $0 as Any }
+                        }
+                    }
+
+                    var response = "**Ran favorite: \(favorite.displayName)**\n\n"
+                    response += "Query: `\(query)`\n"
+                    response += "Results: \(results.count) row(s)\n\n"
+
+                    if !results.isEmpty {
+                        let jsonData = try JSONSerialization.data(withJSONObject: results, options: [.prettyPrinted, .sortedKeys])
+                        let jsonString = String(data: jsonData, encoding: .utf8) ?? "[]"
+                        response += "```json\n\(jsonString)\n```"
+                    }
+
+                    // Log to history
+                    QueryHistoryLogger.shared.logQuery(
+                        query: query,
+                        source: .mcp,
+                        rowCount: results.count
+                    )
+
+                    return CallTool.Result(content: [.text(response)])
+                } catch {
+                    return CallTool.Result(content: [.text("Error running favorite: \(error.localizedDescription)")], isError: true)
+                }
+
+            case "osquery_system_info":
+                do {
+                    var systemInfo: [String: Any] = [:]
+
+                    // Get OS version
+                    if let osResults = try? await osquery.execute("SELECT * FROM os_version"),
+                       let os = osResults.first {
+                        systemInfo["os_name"] = os["name"] ?? "Unknown"
+                        systemInfo["os_version"] = os["version"] ?? "Unknown"
+                        systemInfo["os_build"] = os["build"] ?? "Unknown"
+                        systemInfo["os_platform"] = os["platform"] ?? "Unknown"
+                    }
+
+                    // Get uptime
+                    if let uptimeResults = try? await osquery.execute("SELECT * FROM uptime"),
+                       let uptime = uptimeResults.first {
+                        let days = uptime["days"] ?? "0"
+                        let hours = uptime["hours"] ?? "0"
+                        let minutes = uptime["minutes"] ?? "0"
+                        systemInfo["uptime"] = "\(days)d \(hours)h \(minutes)m"
+                        systemInfo["uptime_days"] = days
+                        systemInfo["uptime_hours"] = hours
+                        systemInfo["uptime_minutes"] = minutes
+                    }
+
+                    // Get system info (hostname, hardware)
+                    if let hostResults = try? await osquery.execute("SELECT hostname, computer_name, cpu_brand, physical_memory, hardware_model FROM system_info"),
+                       let host = hostResults.first {
+                        systemInfo["hostname"] = host["hostname"] ?? "Unknown"
+                        systemInfo["computer_name"] = host["computer_name"] ?? "Unknown"
+                        systemInfo["cpu"] = host["cpu_brand"] ?? "Unknown"
+                        systemInfo["hardware_model"] = host["hardware_model"] ?? "Unknown"
+
+                        if let memBytesStr = host["physical_memory"] as? String,
+                           let bytes = Int64(memBytesStr) {
+                            let gb = Double(bytes) / 1_073_741_824
+                            systemInfo["memory_gb"] = String(format: "%.1f", gb)
+                            systemInfo["memory_bytes"] = bytes
+                        }
+                    }
+
+                    // Format response
+                    var response = "**System Information**\n\n"
+                    response += "| Property | Value |\n"
+                    response += "|----------|-------|\n"
+
+                    let orderedKeys = ["computer_name", "hostname", "os_name", "os_version", "os_build", "uptime", "cpu", "memory_gb", "hardware_model"]
+                    for key in orderedKeys {
+                        if let value = systemInfo[key] {
+                            let displayKey = key.replacingOccurrences(of: "_", with: " ").capitalized
+                            response += "| \(displayKey) | \(value) |\n"
+                        }
+                    }
+
+                    response += "\n```json\n"
+                    let jsonData = try JSONSerialization.data(withJSONObject: systemInfo, options: [.prettyPrinted, .sortedKeys])
+                    let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
+                    response += jsonString
+                    response += "\n```"
+
+                    return CallTool.Result(content: [.text(response)])
+                } catch {
+                    return CallTool.Result(content: [.text("Error: \(error.localizedDescription)")], isError: true)
+                }
+
+            case "osquery_check_process":
+                guard let processName = params.arguments?["name"]?.stringValue else {
+                    return CallTool.Result(content: [.text("Error: Missing 'name' parameter")], isError: true)
+                }
+
+                // Escape single quotes for SQL safety
+                let safeName = processName.replacingOccurrences(of: "'", with: "''")
+
+                do {
+                    let sql = "SELECT name, pid, path, cmdline, state FROM processes WHERE name LIKE '%\(safeName)%' OR path LIKE '%\(safeName)%' LIMIT 10"
+                    let results = try await osquery.execute(sql)
+
+                    let isRunning = !results.isEmpty
+
+                    var response: String
+
+                    if isRunning {
+                        response = "**✅ Process Found**\n\n"
+                        response += "'\(processName)' is running (\(results.count) match\(results.count == 1 ? "" : "es")):\n\n"
+
+                        for proc in results {
+                            let name = proc["name"] as? String ?? "Unknown"
+                            let pid = proc["pid"] as? String ?? "?"
+                            let path = proc["path"] as? String ?? ""
+                            response += "- **\(name)** (PID: \(pid))\n"
+                            if !path.isEmpty {
+                                response += "  Path: `\(path)`\n"
+                            }
+                        }
+
+                        response += "\n```json\n"
+                        let jsonData = try JSONSerialization.data(withJSONObject: results, options: [.prettyPrinted, .sortedKeys])
+                        response += String(data: jsonData, encoding: .utf8) ?? "[]"
+                        response += "\n```"
+                    } else {
+                        response = "**❌ Process Not Found**\n\n"
+                        response += "'\(processName)' is not currently running."
+                    }
+
+                    return CallTool.Result(content: [.text(response)])
+                } catch {
+                    return CallTool.Result(content: [.text("Error: \(error.localizedDescription)")], isError: true)
                 }
 
             default:

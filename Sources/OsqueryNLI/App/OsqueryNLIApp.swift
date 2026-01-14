@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import AppIntents
 
 // Pure AppKit entry point for menu bar app
 @main
@@ -116,6 +117,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPopoverD
         setupMenuBar()
         setupPopover()
         setupNotificationObservers()
+
+        // Register App Shortcuts with the system
+        OsqueryShortcuts.updateAppShortcutParameters()
 
         // Check for updates (respects 24-hour cooldown)
         UpdateChecker.shared.checkForUpdatesIfNeeded()

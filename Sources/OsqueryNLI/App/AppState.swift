@@ -327,10 +327,18 @@ final class AppState {
         // Load query history from shared file
         self.queryHistory = QueryHistoryLogger.shared.readEntries()
 
-        // Load favorites
-        if let data = UserDefaults.standard.data(forKey: "favorites"),
+        // Load favorites from shared store (migrate from UserDefaults if needed)
+        let storedFavorites = FavoritesStore.shared.readFavorites()
+        if storedFavorites.isEmpty,
+           let data = UserDefaults.standard.data(forKey: "favorites"),
            let savedFavorites = try? JSONDecoder().decode([FavoriteQuery].self, from: data) {
+            // Migrate from UserDefaults to shared file store
+            FavoritesStore.shared.replaceFavorites(savedFavorites)
             self.favorites = savedFavorites
+            // Clear old UserDefaults data after migration
+            UserDefaults.standard.removeObject(forKey: "favorites")
+        } else {
+            self.favorites = storedFavorites
         }
 
         // Load recent exports
@@ -649,9 +657,7 @@ final class AppState {
     }
 
     private func saveFavorites() {
-        if let data = try? JSONEncoder().encode(favorites) {
-            UserDefaults.standard.set(data, forKey: "favorites")
-        }
+        FavoritesStore.shared.replaceFavorites(favorites)
     }
 
     // MARK: - Recent Exports Management
