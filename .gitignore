@@ -4,18 +4,17 @@
 .LSOverride
 
 # Swift Package Manager
-/.build
-/Packages
-/.swiftpm
-.swiftpm/configuration/registries.json
-.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
-
-# Xcode
+.build/
+.swiftpm/
+Package.resolved
 xcuserdata/
 DerivedData/
+
+# Xcode
+*.xcodeproj/
 *.xcodeproj/project.xcworkspace/xcuserdata/
 
-# Distribution artifacts (use GitHub Releases instead)
+# Distribution artifacts
 /dist/
 
 # Credentials
@@ -25,5 +24,18 @@ DerivedData/
 
 # IDE
 .idea/
+.vscode/
 *.swp
+*.swo
 *~
+
+# Claude Code
+.claude/
+
+# Build artifacts
+*.dmg
+*.app
+*.zip
+
+# Logs
+*.log
