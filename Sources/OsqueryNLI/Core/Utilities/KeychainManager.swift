@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import OsqueryNLICore
 
 /// Keychain-specific errors
 enum KeychainError: LocalizedError {
@@ -42,7 +43,7 @@ enum KeychainError: LocalizedError {
 final class KeychainManager: Sendable {
     static let shared = KeychainManager()
 
-    private let service = "com.osquerynli.apikeys"
+    private let service = AppConstants.keychainService
 
     private init() {}
 

@@ -77,7 +77,7 @@ private final class LLMTranslator: @unchecked Sendable {
         }
 
         // 2. Try to read from macOS Keychain (same format as main app)
-        if let keychainKey = readFromKeychain(service: "com.klaassen.OsqueryNLI", account: "gemini") {
+        if let keychainKey = readFromKeychain(service: AppConstants.keychainService, account: "gemini") {
             debugLog("Using API key from Keychain")
             return keychainKey
         }

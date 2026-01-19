@@ -849,10 +849,12 @@ final class AppState {
     // MARK: - Scheduled Queries Management
 
     private var scheduledQueriesFileURL: URL {
-        let appSupport = FileManager.default.urls(
+        guard let appSupport = FileManager.default.urls(
             for: .applicationSupportDirectory,
             in: .userDomainMask
-        ).first!
+        ).first else {
+            fatalError("Application Support directory not available - macOS system directories are misconfigured")
+        }
         let dataDir = appSupport.appendingPathComponent("OsqueryNLI")
         // Create with owner-only permissions (0700)
         try? FileManager.default.createDirectory(
