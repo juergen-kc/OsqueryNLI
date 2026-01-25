@@ -54,25 +54,11 @@ struct FavoritesView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "star.leadinghalf.filled")
-                .font(.system(size: 48))
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(.yellow)
-                .accessibilityHidden(true)
-
-            Text("No Favorites Yet")
-                .font(.headline)
-                .foregroundStyle(.secondary)
-
-            Text("Run a query and click the star button\nto save it to your favorites")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("No favorites saved yet. Run a query and click the star button to save it.")
+        EmptyStateView(
+            icon: "star.leadinghalf.filled",
+            title: "No Favorites Yet",
+            message: "Run a query and click the star button\nto save it to your favorites"
+        )
     }
 
     private var favoritesList: some View {

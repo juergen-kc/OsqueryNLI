@@ -74,6 +74,7 @@ struct ScheduledQueriesView: View {
                 } label: {
                     Label("Add Schedule", systemImage: "plus")
                 }
+                .accessibilityLabel("Add new scheduled query")
             }
 
             // Global settings
@@ -82,6 +83,7 @@ struct ScheduledQueriesView: View {
 
                 Toggle("Enable Scheduler", isOn: $state.schedulerEnabled)
                     .toggleStyle(.switch)
+                    .accessibilityLabel(appState.schedulerEnabled ? "Scheduler enabled, toggle to disable" : "Scheduler disabled, toggle to enable")
 
                 Divider()
                     .frame(height: 20)
@@ -116,32 +118,13 @@ struct ScheduledQueriesView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Spacer()
-
-            Image(systemName: "clock.arrow.2.circlepath")
-                .font(.system(size: 48))
-                .foregroundColor(.secondary)
-
-            Text("No Scheduled Queries")
-                .font(.headline)
-
-            Text("Schedule queries to run automatically at regular intervals.\nGet notified when specific conditions are met.")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-
-            Button {
-                showingAddSheet = true
-            } label: {
-                Label("Add Your First Schedule", systemImage: "plus")
-            }
-            .buttonStyle(.borderedProminent)
-
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding()
+        EmptyStateView(
+            icon: "clock.arrow.2.circlepath",
+            title: "No Scheduled Queries",
+            message: "Schedule queries to run automatically at regular intervals.\nGet notified when specific conditions are met.",
+            actionTitle: "Add Your First Schedule",
+            action: { showingAddSheet = true }
+        )
     }
 
     private var queryList: some View {

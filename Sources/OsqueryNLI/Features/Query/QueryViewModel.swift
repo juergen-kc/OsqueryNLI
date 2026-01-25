@@ -34,6 +34,9 @@ final class QueryViewModel {
     /// Temporary storage for current input when browsing history
     private var savedCurrentInput: String = ""
 
+    /// Debounce task for autocomplete updates
+    private var autoCompleteDebounceTask: Task<Void, Never>?
+
     // MARK: - Dependencies
 
     private let appState: AppState
@@ -530,16 +533,26 @@ final class QueryViewModel {
         }
     }
 
-    /// Update auto-complete visibility based on query text
+    /// Update auto-complete visibility based on query text (debounced)
     func updateAutoComplete() {
-        let hasText = queryText.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2
-        let hasSuggestions = !autoCompleteSuggestions.isEmpty
+        // Cancel any pending debounce
+        autoCompleteDebounceTask?.cancel()
 
-        if hasText && hasSuggestions && !isQuerying && !isBrowsingHistory {
-            showAutoComplete = true
-            selectedSuggestionIndex = 0
-        } else {
-            showAutoComplete = false
+        // Debounce by 150ms to avoid excessive updates on fast typing
+        autoCompleteDebounceTask = Task {
+            try? await Task.sleep(for: .milliseconds(150))
+
+            guard !Task.isCancelled else { return }
+
+            let hasText = queryText.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2
+            let hasSuggestions = !autoCompleteSuggestions.isEmpty
+
+            if hasText && hasSuggestions && !isQuerying && !isBrowsingHistory {
+                showAutoComplete = true
+                selectedSuggestionIndex = 0
+            } else {
+                showAutoComplete = false
+            }
         }
     }
 

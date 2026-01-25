@@ -23,6 +23,7 @@ struct ScheduledQueryRow: View {
             .toggleStyle(.switch)
             .labelsHidden()
             .controlSize(.small)
+            .accessibilityLabel(query.isEnabled ? "Disable \(query.name)" : "Enable \(query.name)")
 
             // Query info
             VStack(alignment: .leading, spacing: 4) {
@@ -32,13 +33,7 @@ struct ScheduledQueryRow: View {
                         .lineLimit(1)
 
                     if query.isSQL {
-                        Text("SQL")
-                            .font(.caption2)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 2)
-                            .background(Color.blue.opacity(0.2))
-                            .foregroundColor(.blue)
-                            .cornerRadius(4)
+                        StatusBadge("SQL", color: .blue, style: .tag)
                     }
 
                     if query.alertRule != nil {
@@ -91,18 +86,21 @@ struct ScheduledQueryRow: View {
                 .buttonStyle(.borderless)
                 .help("Run now and view results")
                 .disabled(isRunning)
+                .accessibilityLabel("Run \(query.name) now")
 
                 Button(action: onViewResults) {
                     Image(systemName: "chart.line.uptrend.xyaxis")
                 }
                 .buttonStyle(.borderless)
                 .help("View results")
+                .accessibilityLabel("View results for \(query.name)")
 
                 Button(action: onEdit) {
                     Image(systemName: "pencil")
                 }
                 .buttonStyle(.borderless)
                 .help("Edit")
+                .accessibilityLabel("Edit \(query.name)")
 
                 Button(action: onDelete) {
                     Image(systemName: "trash")
@@ -110,6 +108,7 @@ struct ScheduledQueryRow: View {
                 .buttonStyle(.borderless)
                 .foregroundColor(.red)
                 .help("Delete")
+                .accessibilityLabel("Delete \(query.name)")
             }
         }
         .padding(.vertical, 4)
