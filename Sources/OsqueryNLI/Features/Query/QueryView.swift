@@ -110,15 +110,15 @@ struct QueryView: View {
     }
 
     private func saveResultToast(_ vm: QueryViewModel) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: AppLayout.Spacing.sm) {
             Image(systemName: vm.saveResultSuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
                 .foregroundStyle(vm.saveResultSuccess ? .green : .red)
             Text(vm.saveResultMessage)
                 .font(.callout)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .padding(.horizontal, AppLayout.Spacing.lg)
+        .padding(.vertical, AppLayout.Spacing.sm)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: AppLayout.CornerRadius.md))
         .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
     }
 
@@ -153,6 +153,7 @@ struct QueryView: View {
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                     .help(vm.isFavorite(vm.currentQuery) ? "Remove from favorites" : "Add to favorites")
+                    .accessibilityLabel(vm.isFavorite(vm.currentQuery) ? "Remove from favorites" : "Add to favorites")
                 }
             } else {
                 Text("Osquery NLI")
@@ -181,16 +182,7 @@ struct QueryView: View {
             Spacer()
 
             // Provider badge
-            HStack(spacing: 4) {
-                Image(systemName: "cpu")
-                    .font(.caption)
-                Text(vm.selectedProvider.displayName)
-                    .font(.caption)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(.quaternary)
-            .clipShape(Capsule())
+            StatusBadge.provider(vm.selectedProvider.displayName)
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
@@ -296,11 +288,11 @@ struct QueryView: View {
                 .help("Submit query (⌘↩)")
                 .accessibilityLabel("Submit query")
             }
-            .padding(12)
+            .padding(AppLayout.Spacing.md)
             .background(.background)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: AppLayout.CornerRadius.lg))
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: AppLayout.CornerRadius.lg)
                     .stroke(.quaternary, lineWidth: 1)
             )
             .overlay(alignment: .topLeading) {
@@ -317,7 +309,7 @@ struct QueryView: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
-            .animation(.easeOut(duration: 0.15), value: vm.showAutoComplete)
+            .animation(.easeOut(duration: AppAnimation.fast), value: vm.showAutoComplete)
 
             // Input hint
             if vm.isBrowsingHistory {
@@ -334,7 +326,7 @@ struct QueryView: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .animation(.easeInOut(duration: 0.15), value: vm.isBrowsingHistory)
+        .animation(.easeInOut(duration: AppAnimation.fast), value: vm.isBrowsingHistory)
         .sheet(isPresented: $bindableVM.showingTemplates) {
             QueryTemplatesView { query in
                 vm.selectTemplate(query)
@@ -402,7 +394,9 @@ struct QueryView: View {
             .buttonStyle(.bordered)
             .controlSize(.small)
             .keyboardShortcut(.escape, modifiers: [])
-            .padding(.top, 12)
+            .padding(.top, AppLayout.Spacing.md)
+            .accessibilityLabel("Cancel query")
+            .accessibilityHint("Press Escape to cancel the current query")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -847,6 +841,7 @@ struct ResultsTableView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .help("Click to sort by \(column.name)")
+                                .accessibilityLabel(sortAccessibilityLabel(for: column.name))
                             }
                         }
                         .background(
@@ -909,6 +904,13 @@ struct ResultsTableView: View {
             sortAscending = true
         }
     }
+
+    private func sortAccessibilityLabel(for column: String) -> String {
+        if sortColumn == column {
+            return "Sort by \(column), currently \(sortAscending ? "ascending" : "descending")"
+        }
+        return "Sort by \(column)"
+    }
 }
 
 // MARK: - Quick Start Button
@@ -925,11 +927,11 @@ private struct QuickStartButton: View {
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(10)
+                .padding(AppLayout.Spacing.sm)
                 .background(isHovered ? Color.accentColor.opacity(0.1) : Color.secondary.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .clipShape(RoundedRectangle(cornerRadius: AppLayout.CornerRadius.sm))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 6)
+                    RoundedRectangle(cornerRadius: AppLayout.CornerRadius.sm)
                         .stroke(isHovered ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
                 )
         }

@@ -129,4 +129,52 @@ enum AppLayout {
         static let columnWidthMax: CGFloat = 250
         static let sampleRowsForWidth = 100
     }
+
+    /// Button size presets
+    enum Button {
+        static let heightSmall: CGFloat = 24
+        static let heightMedium: CGFloat = 32
+        static let heightLarge: CGFloat = 40
+        static let minWidth: CGFloat = 60
+    }
+
+    /// Icon size presets
+    enum Icon {
+        static let tiny: CGFloat = 10
+        static let small: CGFloat = 12
+        static let medium: CGFloat = 16
+        static let large: CGFloat = 20
+        static let xlarge: CGFloat = 24
+    }
+
+    /// Corner radius presets
+    enum CornerRadius {
+        static let sm: CGFloat = 4
+        static let md: CGFloat = 8
+        static let lg: CGFloat = 12
+    }
+}
+
+// MARK: - Animation Presets
+
+/// Animation timing presets for consistent motion
+enum AppAnimation {
+    static let fast: Double = 0.15
+    static let normal: Double = 0.25
+    static let slow: Double = 0.4
+
+    /// Spring animation with configurable response
+    static func spring(response: Double = 0.3) -> Animation {
+        .spring(response: response, dampingFraction: 0.8)
+    }
+
+    /// Quick ease-in-out animation
+    static var quickEase: Animation {
+        .easeInOut(duration: fast)
+    }
+
+    /// Normal ease-in-out animation
+    static var normalEase: Animation {
+        .easeInOut(duration: normal)
+    }
 }

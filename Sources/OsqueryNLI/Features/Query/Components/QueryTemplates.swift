@@ -633,26 +633,11 @@ struct QueryTemplatesView: View {
             Divider()
 
             // Search
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                TextField("Search templates...", text: $searchText)
-                    .textFieldStyle(.plain)
-                if !searchText.isEmpty {
-                    Button {
-                        searchText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(10)
-            .background(.quaternary.opacity(0.5))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .padding(.horizontal)
-            .padding(.vertical, 8)
+            SearchBar(text: $searchText, placeholder: "Search templates...")
+                .background(.quaternary.opacity(0.5))
+                .clipShape(RoundedRectangle(cornerRadius: AppLayout.CornerRadius.md))
+                .padding(.horizontal, AppLayout.Spacing.lg)
+                .padding(.vertical, AppLayout.Spacing.sm)
 
             // Categories and Templates
             ScrollView {
@@ -713,13 +698,13 @@ struct TemplateCard: View {
                     .foregroundStyle(.tertiary)
                     .lineLimit(2)
             }
-            .padding(10)
+            .padding(AppLayout.Spacing.sm)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(isHovered ? Color.accentColor.opacity(0.1) : Color.clear)
             .background(.background)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .clipShape(RoundedRectangle(cornerRadius: AppLayout.CornerRadius.md))
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: AppLayout.CornerRadius.md)
                     .stroke(isHovered ? Color.accentColor.opacity(0.5) : Color.secondary.opacity(0.2), lineWidth: 1)
             )
         }

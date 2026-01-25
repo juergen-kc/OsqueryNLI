@@ -41,21 +41,8 @@ struct HistoryView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Search bar with filter
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                TextField("Search history...", text: $searchText)
-                    .textFieldStyle(.plain)
-
-                if !searchText.isEmpty {
-                    Button {
-                        searchText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
+            HStack(spacing: AppLayout.Spacing.sm) {
+                SearchBar(text: $searchText, placeholder: "Search history...")
 
                 Picker("", selection: $historyFilter) {
                     ForEach(HistoryFilter.allCases, id: \.self) { filter in
@@ -74,7 +61,7 @@ struct HistoryView: View {
                 .help("Refresh history")
                 .accessibilityLabel("Refresh history")
             }
-            .padding(12)
+            .padding(AppLayout.Spacing.md)
             .background(.background)
 
             Divider()

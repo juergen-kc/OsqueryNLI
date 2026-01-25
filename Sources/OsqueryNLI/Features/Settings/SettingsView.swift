@@ -189,19 +189,15 @@ struct TableSettingsView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Search
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                TextField("Search tables...", text: $searchText)
-                    .textFieldStyle(.plain)
-            }
-            .padding(8)
-            .background(.background)
+            SearchBar(text: $searchText, placeholder: "Search tables...")
+                .padding(.horizontal, AppLayout.Spacing.sm)
+                .padding(.vertical, AppLayout.Spacing.xs)
+                .background(.background)
 
             Divider()
 
             // Quick selection buttons
-            HStack(spacing: 12) {
+            HStack(spacing: AppLayout.Spacing.md) {
                 Button {
                     appState.selectAllTables(availableTables)
                 } label: {
@@ -234,8 +230,8 @@ struct TableSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
+            .padding(.horizontal, AppLayout.Spacing.lg)
+            .padding(.vertical, AppLayout.Spacing.sm)
             .background(.background)
 
             Divider()
@@ -260,9 +256,9 @@ struct TableSettingsView: View {
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                     }
-                    .padding(10)
+                    .padding(AppLayout.Spacing.sm)
                     .background(Color.orange.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .clipShape(RoundedRectangle(cornerRadius: AppLayout.CornerRadius.sm))
                     .padding(.horizontal)
                     .padding(.top, 8)
                 }

@@ -125,21 +125,10 @@ struct SchemaBrowserView: View {
     private var tableListPanel: some View {
         VStack(spacing: 0) {
             // Search bar
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                TextField("Search tables...", text: $searchText)
-                    .textFieldStyle(.plain)
-                if !searchText.isEmpty {
-                    Button(action: { searchText = "" }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(10)
-            .background(.background)
+            SearchBar(text: $searchText, placeholder: "Search tables...")
+                .padding(.horizontal, AppLayout.Spacing.sm)
+                .padding(.vertical, AppLayout.Spacing.xs)
+                .background(.background)
 
             Divider()
 
@@ -156,8 +145,8 @@ struct SchemaBrowserView: View {
                     .foregroundStyle(.secondary)
                     .accessibilityLabel("\(filteredTables.count) tables displayed")
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .padding(.horizontal, AppLayout.Spacing.sm)
+            .padding(.vertical, AppLayout.Spacing.sm)
             .background(.background.opacity(0.5))
 
             Divider()
@@ -209,14 +198,7 @@ struct SchemaBrowserView: View {
                                 .font(.headline)
 
                             if OsqueryService.aiDiscoveryTables.contains(table) {
-                                Text("AI")
-                                    .font(.caption2)
-                                    .fontWeight(.semibold)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(.purple.opacity(0.2))
-                                    .foregroundStyle(.purple)
-                                    .clipShape(Capsule())
+                                StatusBadge.aiTable()
                             }
 
                             if appState.enabledTables.contains(table) {
@@ -531,8 +513,8 @@ private struct TableRowView: View {
                     .accessibilityHidden(true)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, AppLayout.Spacing.sm)
+        .padding(.vertical, AppLayout.Spacing.sm)
         .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)

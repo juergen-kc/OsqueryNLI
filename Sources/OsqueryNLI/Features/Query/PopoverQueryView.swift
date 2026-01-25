@@ -22,7 +22,7 @@ struct PopoverQueryView: View {
 
             // Query input
             queryInputView
-                .padding(12)
+                .padding(AppLayout.Spacing.md)
 
             Divider()
 
@@ -81,13 +81,13 @@ struct PopoverQueryView: View {
                 Text(appState.selectedProvider.displayName)
                     .font(.caption2)
             }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
+            .padding(.horizontal, AppLayout.Spacing.sm)
+            .padding(.vertical, AppLayout.Spacing.xxs)
             .background(.quaternary)
             .clipShape(Capsule())
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, AppLayout.Spacing.md)
+        .padding(.vertical, AppLayout.Spacing.sm)
     }
 
     // MARK: - Query Input
@@ -120,11 +120,11 @@ struct PopoverQueryView: View {
             .disabled(queryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || appState.isQuerying)
             .help("Submit (⌘↩)")
         }
-        .padding(10)
+        .padding(AppLayout.Spacing.sm)
         .background(.background)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: AppLayout.CornerRadius.md))
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: AppLayout.CornerRadius.md)
                 .stroke(.quaternary, lineWidth: 1)
         )
     }
@@ -208,10 +208,10 @@ struct PopoverQueryView: View {
                 if let summary = result.summary {
                     Text(summary)
                         .font(.callout)
-                        .padding(8)
+                        .padding(AppLayout.Spacing.sm)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(.blue.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .clipShape(RoundedRectangle(cornerRadius: AppLayout.CornerRadius.sm))
                 }
 
                 // SQL query (collapsible)
@@ -219,10 +219,10 @@ struct PopoverQueryView: View {
                     Text(result.sql)
                         .font(.system(.caption, design: .monospaced))
                         .textSelection(.enabled)
-                        .padding(6)
+                        .padding(AppLayout.Spacing.sm)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(.quaternary)
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                        .clipShape(RoundedRectangle(cornerRadius: AppLayout.CornerRadius.sm))
                 } label: {
                     HStack {
                         Text("SQL Query")
@@ -251,9 +251,11 @@ struct PopoverQueryView: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.mini)
+                    .accessibilityLabel("Open in full window")
+                    .accessibilityHint("Opens query results in a larger window")
                 }
             }
-            .padding(12)
+            .padding(AppLayout.Spacing.md)
         }
     }
 
@@ -288,6 +290,7 @@ struct PopoverQueryView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
+            .accessibilityLabel("Open full query window")
 
             Spacer()
 
@@ -299,6 +302,7 @@ struct PopoverQueryView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
+            .accessibilityLabel("Open query history")
 
             Button {
                 openSettings()
@@ -308,9 +312,10 @@ struct PopoverQueryView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
+            .accessibilityLabel("Open settings")
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, AppLayout.Spacing.md)
+        .padding(.vertical, AppLayout.Spacing.sm)
     }
 
     // MARK: - Actions

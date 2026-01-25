@@ -55,9 +55,9 @@ struct OsqueryMissingView: View {
                         HStack {
                             Text(brewCommand)
                                 .font(.system(.body, design: .monospaced))
-                                .padding(8)
+                                .padding(AppLayout.Spacing.sm)
                                 .background(Color.black.opacity(0.05))
-                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                                .clipShape(RoundedRectangle(cornerRadius: AppLayout.CornerRadius.sm))
 
                             Button {
                                 copyCommand()
@@ -76,9 +76,9 @@ struct OsqueryMissingView: View {
                         }
                         .buttonStyle(.bordered)
                     }
-                    .padding()
+                    .padding(AppLayout.Spacing.lg)
                     .background(Color.blue.opacity(0.05))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .clipShape(RoundedRectangle(cornerRadius: AppLayout.CornerRadius.lg))
 
                     Text("or")
                         .font(.caption)
@@ -104,9 +104,9 @@ struct OsqueryMissingView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    .padding()
+                    .padding(AppLayout.Spacing.lg)
                     .background(Color.gray.opacity(0.05))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .clipShape(RoundedRectangle(cornerRadius: AppLayout.CornerRadius.lg))
                 }
             }
 
@@ -129,7 +129,7 @@ struct OsqueryMissingView: View {
             .buttonStyle(.bordered)
             .disabled(isChecking)
         }
-        .padding(32)
+        .padding(AppLayout.Spacing.xxl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 

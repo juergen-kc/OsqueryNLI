@@ -74,7 +74,7 @@ struct AddScheduledQuerySheet: View {
                                     .font(.system(.body, design: .monospaced))
                                     .frame(minHeight: 60, maxHeight: 120)
                                     .overlay(
-                                        RoundedRectangle(cornerRadius: 6)
+                                        RoundedRectangle(cornerRadius: AppLayout.CornerRadius.sm)
                                             .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                                     )
                             }
@@ -82,7 +82,7 @@ struct AddScheduledQuerySheet: View {
                             Toggle("Raw SQL (instead of natural language)", isOn: $isSQL)
                                 .toggleStyle(.checkbox)
                         }
-                        .padding(8)
+                        .padding(AppLayout.Spacing.sm)
                     }
 
                     // Schedule section
@@ -99,7 +99,7 @@ struct AddScheduledQuerySheet: View {
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
-                        .padding(8)
+                        .padding(AppLayout.Spacing.sm)
                     }
 
                     // Alert section
@@ -135,7 +135,7 @@ struct AddScheduledQuerySheet: View {
                                 }
                             }
                         }
-                        .padding(8)
+                        .padding(AppLayout.Spacing.sm)
                     }
 
                     // Test section
@@ -165,7 +165,7 @@ struct AddScheduledQuerySheet: View {
                                     .foregroundColor(.red)
                             }
                         }
-                        .padding(8)
+                        .padding(AppLayout.Spacing.sm)
                     }
                 }
                 .padding()
