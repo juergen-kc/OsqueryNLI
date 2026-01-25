@@ -218,8 +218,8 @@ struct HistoryRowView: View {
                     if entry.source == .mcp {
                         Text("MCP")
                             .font(.system(size: 9 * fontScale.scaleFactor, weight: .medium))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
+                            .padding(.horizontal, AppLayout.Spacing.sm)
+                            .padding(.vertical, AppLayout.Spacing.xxs)
                             .background(Color.blue.opacity(0.15))
                             .foregroundStyle(.blue)
                             .clipShape(Capsule())
@@ -278,7 +278,7 @@ struct HistoryRowView: View {
                 }
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, AppLayout.Spacing.sm)
         .contentShape(Rectangle())
         .onHover { hovering in
             isHovered = hovering

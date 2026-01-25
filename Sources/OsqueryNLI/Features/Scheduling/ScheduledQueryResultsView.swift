@@ -148,7 +148,7 @@ struct ScheduledQueryResultsView: View {
             }
         }
         .padding(.horizontal)
-        .padding(.vertical, 8)
+        .padding(.vertical, AppLayout.Spacing.sm)
         .background(Color(NSColor.controlBackgroundColor))
     }
 
@@ -161,8 +161,8 @@ struct ScheduledQueryResultsView: View {
                         Text(column)
                             .font(.caption.bold())
                             .frame(minWidth: 100, alignment: .leading)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
+                            .padding(.horizontal, AppLayout.Spacing.sm)
+                            .padding(.vertical, AppLayout.Spacing.sm)
                             .background(Color(NSColor.controlBackgroundColor))
                     }
                 }
@@ -176,8 +176,8 @@ struct ScheduledQueryResultsView: View {
                             Text(row[column] ?? "")
                                 .font(.system(.caption, design: .monospaced))
                                 .frame(minWidth: 100, alignment: .leading)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
+                                .padding(.horizontal, AppLayout.Spacing.sm)
+                                .padding(.vertical, AppLayout.Spacing.xs)
                         }
                     }
                     .background(index % 2 == 0 ? Color.clear : Color(NSColor.controlBackgroundColor).opacity(0.5))
@@ -287,7 +287,7 @@ struct ScheduledQueryResultsView: View {
                 .font(.caption)
             }
             .padding(.horizontal)
-            .padding(.vertical, 8)
+            .padding(.vertical, AppLayout.Spacing.sm)
 
             ScrollView {
                 LazyVStack(spacing: 2) {
@@ -348,7 +348,7 @@ struct ScheduledQueryResultsView: View {
                     .accessibilityHidden(true)
             }
             .padding(.horizontal)
-            .padding(.vertical, 8)
+            .padding(.vertical, AppLayout.Spacing.sm)
             .background(selectedResult?.id == result.id ? Color.accentColor.opacity(0.1) : Color.clear)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(historyRowAccessibilityLabel(result))

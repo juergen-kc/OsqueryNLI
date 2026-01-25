@@ -178,7 +178,7 @@ struct SchemaBrowserView: View {
                             }
                         }
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, AppLayout.Spacing.xs)
                 }
             }
         }
@@ -284,8 +284,8 @@ struct SchemaBrowserView: View {
                                     .foregroundStyle(.secondary)
                                     .frame(width: 100, alignment: .leading)
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
+                            .padding(.horizontal, AppLayout.Spacing.md)
+                            .padding(.vertical, AppLayout.Spacing.sm)
                             .background(Color(nsColor: .controlBackgroundColor))
 
                             Divider()
@@ -309,14 +309,14 @@ struct SchemaBrowserView: View {
                                         .foregroundStyle(.secondary)
                                         .frame(width: 100, alignment: .leading)
                                 }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
+                                .padding(.horizontal, AppLayout.Spacing.md)
+                                .padding(.vertical, AppLayout.Spacing.sm)
                                 .background(selectedColumnIndex == index && focusedPanel == .columnDetails ? Color.accentColor.opacity(0.2) : Color.clear)
                                 .accessibilityElement(children: .combine)
                                 .accessibilityLabel("\(column.name), type \(column.type)")
 
                                 Divider()
-                                    .padding(.leading, 12)
+                                    .padding(.leading, AppLayout.Spacing.md)
                             }
                         }
                     }

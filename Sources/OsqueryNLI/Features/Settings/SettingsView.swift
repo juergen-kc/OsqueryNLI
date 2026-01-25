@@ -260,7 +260,7 @@ struct TableSettingsView: View {
                     .background(Color.orange.opacity(0.1))
                     .clipShape(RoundedRectangle(cornerRadius: AppLayout.CornerRadius.sm))
                     .padding(.horizontal)
-                    .padding(.top, 8)
+                    .padding(.top, AppLayout.Spacing.sm)
                 }
 
                 // Table list
@@ -521,7 +521,7 @@ struct GeneralSettingsView: View {
                             }
                         }
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, AppLayout.Spacing.xs)
                 }
             }
 

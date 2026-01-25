@@ -185,7 +185,7 @@ struct QueryView: View {
             StatusBadge.provider(vm.selectedProvider.displayName)
         }
         .padding(.horizontal)
-        .padding(.vertical, 8)
+        .padding(.vertical, AppLayout.Spacing.sm)
     }
 
     // MARK: - Query Input
@@ -373,7 +373,7 @@ struct QueryView: View {
                 StageConnector(isActive: vm.stageOrder(vm.queryStage) >= vm.stageOrder(.summarizing))
                 stageIndicator(vm, stage: .summarizing, current: vm.queryStage)
             }
-            .padding(.top, 4)
+            .padding(.top, AppLayout.Spacing.xs)
 
             if !vm.currentQuery.isEmpty {
                 Text("\"\(vm.currentQuery)\"")
@@ -382,7 +382,7 @@ struct QueryView: View {
                     .lineLimit(2)
                     .padding(.horizontal, 40)
                     .multilineTextAlignment(.center)
-                    .padding(.top, 4)
+                    .padding(.top, AppLayout.Spacing.xs)
             }
 
             // Cancel button
@@ -456,7 +456,7 @@ struct QueryView: View {
                 .buttonStyle(.bordered)
                 .controlSize(.regular)
             }
-            .padding(.top, 8)
+            .padding(.top, AppLayout.Spacing.sm)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -509,7 +509,7 @@ struct QueryView: View {
                 shortcutHint("↑↓", "History")
                 shortcutHint("⌘?", "Help")
             }
-            .padding(.top, 8)
+            .padding(.top, AppLayout.Spacing.sm)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
@@ -651,7 +651,7 @@ struct QueryView: View {
                                     .textSelection(.enabled)
                             }
                             .frame(maxHeight: 200)
-                            .padding(8)
+                            .padding(AppLayout.Spacing.sm)
                             .background(colorScheme == .dark ? Color.black.opacity(0.3) : Color.black.opacity(0.05))
                             .clipShape(RoundedRectangle(cornerRadius: 4))
                         } else {
@@ -807,8 +807,8 @@ struct ResultsTableView: View {
                                         .lineLimit(2)
                                         .truncationMode(.tail)
                                         .frame(width: columnWidths[column.name] ?? 100, alignment: .leading)
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 8)
+                                        .padding(.horizontal, AppLayout.Spacing.md)
+                                        .padding(.vertical, AppLayout.Spacing.sm)
                                         .help(row[column.name] ?? "-") // Show full value on hover
                                 }
                             }
@@ -835,8 +835,8 @@ struct ResultsTableView: View {
                                         Spacer()
                                     }
                                     .frame(width: columnWidths[column.name] ?? 100, alignment: .leading)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 10)
+                                    .padding(.horizontal, AppLayout.Spacing.md)
+                                    .padding(.vertical, AppLayout.Spacing.md)
                                     .contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain)
@@ -871,8 +871,8 @@ struct ResultsTableView: View {
             Text("Showing first \(Self.maxDisplayRows) of \(result.rows.count) rows. Export to view all results.")
                 .font(.caption)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, AppLayout.Spacing.md)
+        .padding(.vertical, AppLayout.Spacing.sm)
         .frame(maxWidth: .infinity)
         .background(Color.orange.opacity(0.1))
         .clipShape(RoundedRectangle(cornerRadius: 6))
@@ -962,7 +962,7 @@ private struct shortcutHint: View {
                 .font(.caption2.weight(.medium))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 5)
-                .padding(.vertical, 2)
+                .padding(.vertical, AppLayout.Spacing.xxs)
                 .background(.secondary.opacity(0.15))
                 .clipShape(RoundedRectangle(cornerRadius: 3))
             Text(label)
@@ -1036,8 +1036,8 @@ private struct AutoCompleteSuggestionRow: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, AppLayout.Spacing.md)
+            .padding(.vertical, AppLayout.Spacing.sm)
             .background(isSelected || isHovered ? Color.accentColor.opacity(0.1) : Color.clear)
             .contentShape(Rectangle())
         }
