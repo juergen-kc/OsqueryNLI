@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 /// Service for executing osquery commands
 /// Note: @unchecked Sendable is safe here because:
@@ -7,6 +8,7 @@ import Foundation
 public final class OsqueryService: OsqueryServiceProtocol, @unchecked Sendable {
     private let processRunner = ProcessRunner()
     private let osqueryPath: String
+    private static let logger = Logger(subsystem: "com.osquerynli", category: "OsqueryService")
 
     /// Path to osqueryd socket for connecting to daemon with extensions
     private static let daemonSocketPath = "/var/osquery/osquery.em"
@@ -39,15 +41,26 @@ public final class OsqueryService: OsqueryServiceProtocol, @unchecked Sendable {
         let fileManager = FileManager.default
         let tmpDir = "/tmp"
 
-        guard let contents = try? fileManager.contentsOfDirectory(atPath: tmpDir) else { return }
+        let contents: [String]
+        do {
+            contents = try fileManager.contentsOfDirectory(atPath: tmpDir)
+        } catch {
+            logger.debug("Could not list /tmp for socket cleanup: \(error.localizedDescription)")
+            return
+        }
 
         for file in contents where file.hasPrefix("osquery_nli_") && file.hasSuffix(".sock") {
             let path = (tmpDir as NSString).appendingPathComponent(file)
             // Remove socket files older than 1 hour (stale)
-            if let attrs = try? fileManager.attributesOfItem(atPath: path),
-               let modDate = attrs[.modificationDate] as? Date,
-               Date().timeIntervalSince(modDate) > 3600 {
-                try? fileManager.removeItem(atPath: path)
+            do {
+                let attrs = try fileManager.attributesOfItem(atPath: path)
+                if let modDate = attrs[.modificationDate] as? Date,
+                   Date().timeIntervalSince(modDate) > 3600 {
+                    try fileManager.removeItem(atPath: path)
+                    logger.debug("Cleaned up stale socket: \(file)")
+                }
+            } catch {
+                logger.debug("Could not clean up socket \(file): \(error.localizedDescription)")
             }
         }
     }

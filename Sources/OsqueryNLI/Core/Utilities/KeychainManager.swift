@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import Security
 import OsqueryNLICore
 
@@ -44,6 +45,7 @@ final class KeychainManager: Sendable {
     static let shared = KeychainManager()
 
     private let service = AppConstants.keychainService
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.osquerynli", category: "Keychain")
 
     private init() {}
 
@@ -55,8 +57,12 @@ final class KeychainManager: Sendable {
     func setAPIKey(_ key: String, for provider: LLMProvider) throws {
         let account = provider.rawValue
 
-        // Delete existing key first (ignore errors - key might not exist)
-        try? deleteAPIKey(for: provider)
+        // Delete existing key first (key might not exist, which is fine)
+        do {
+            try deleteAPIKey(for: provider)
+        } catch {
+            logger.warning("Failed to delete existing key for \(provider.rawValue) before save: \(error.localizedDescription)")
+        }
 
         // Empty key means "remove"
         guard !key.isEmpty else { return }

@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import OSLog
+import OsqueryNLICore
 
 /// Main application state using @Observable (macOS 14+)
 @Observable
@@ -17,27 +18,30 @@ final class AppState {
 
     var selectedProvider: LLMProvider {
         didSet {
-            UserDefaults.standard.set(selectedProvider.rawValue, forKey: "selectedProvider")
+            UserDefaults.standard.set(selectedProvider.rawValue, forKey: UserDefaultsKeys.selectedProvider)
         }
     }
 
     var selectedModel: String {
         didSet {
-            UserDefaults.standard.set(selectedModel, forKey: "selectedModel")
+            UserDefaults.standard.set(selectedModel, forKey: UserDefaultsKeys.selectedModel)
         }
     }
 
     var enabledTables: Set<String> {
         didSet {
-            if let data = try? JSONEncoder().encode(Array(enabledTables)) {
-                UserDefaults.standard.set(data, forKey: "enabledTables")
+            do {
+                let data = try JSONEncoder().encode(Array(enabledTables))
+                UserDefaults.standard.set(data, forKey: UserDefaultsKeys.enabledTables)
+            } catch {
+                logger.error("Failed to encode enabledTables: \(error.localizedDescription)")
             }
         }
     }
 
     var aiDiscoveryEnabled: Bool {
         didSet {
-            UserDefaults.standard.set(aiDiscoveryEnabled, forKey: "aiDiscoveryEnabled")
+            UserDefaults.standard.set(aiDiscoveryEnabled, forKey: UserDefaultsKeys.aiDiscoveryEnabled)
             osqueryService.aiDiscoveryEnabled = aiDiscoveryEnabled
             // Auto-add/remove AI tables when toggling AI Discovery
             if aiDiscoveryEnabled {
@@ -50,7 +54,7 @@ final class AppState {
 
     var fontScale: FontScale {
         didSet {
-            UserDefaults.standard.set(fontScale.rawValue, forKey: "fontScale")
+            UserDefaults.standard.set(fontScale.rawValue, forKey: UserDefaultsKeys.fontScale)
         }
     }
 
@@ -64,7 +68,7 @@ final class AppState {
 
     var schedulerEnabled: Bool = false {
         didSet {
-            UserDefaults.standard.set(schedulerEnabled, forKey: "schedulerEnabled")
+            UserDefaults.standard.set(schedulerEnabled, forKey: UserDefaultsKeys.schedulerEnabled)
             if schedulerEnabled {
                 schedulerService?.start()
             } else {
@@ -75,7 +79,7 @@ final class AppState {
 
     var notificationsEnabled: Bool = false {
         didSet {
-            UserDefaults.standard.set(notificationsEnabled, forKey: "notificationsEnabled")
+            UserDefaults.standard.set(notificationsEnabled, forKey: UserDefaultsKeys.notificationsEnabled)
         }
     }
 
@@ -281,7 +285,7 @@ final class AppState {
 
     var mcpServerEnabled: Bool {
         didSet {
-            UserDefaults.standard.set(mcpServerEnabled, forKey: "mcpServerEnabled")
+            UserDefaults.standard.set(mcpServerEnabled, forKey: UserDefaultsKeys.mcpServerEnabled)
             if mcpServerEnabled {
                 startMCPServer()
             } else {
@@ -292,7 +296,7 @@ final class AppState {
 
     var mcpAutoStart: Bool {
         didSet {
-            UserDefaults.standard.set(mcpAutoStart, forKey: "mcpAutoStart")
+            UserDefaults.standard.set(mcpAutoStart, forKey: UserDefaultsKeys.mcpAutoStart)
         }
     }
 
@@ -309,15 +313,15 @@ final class AppState {
 
     init() {
         // Load settings from UserDefaults
-        let providerRaw = UserDefaults.standard.string(forKey: "selectedProvider") ?? LLMProvider.gemini.rawValue
+        let providerRaw = UserDefaults.standard.string(forKey: UserDefaultsKeys.selectedProvider) ?? LLMProvider.gemini.rawValue
         let provider = LLMProvider(rawValue: providerRaw) ?? .gemini
         self.selectedProvider = provider
 
-        self.selectedModel = UserDefaults.standard.string(forKey: "selectedModel")
+        self.selectedModel = UserDefaults.standard.string(forKey: UserDefaultsKeys.selectedModel)
             ?? provider.defaultModel
 
         // Load enabled tables
-        if let data = UserDefaults.standard.data(forKey: "enabledTables"),
+        if let data = UserDefaults.standard.data(forKey: UserDefaultsKeys.enabledTables),
            let tables = try? JSONDecoder().decode([String].self, from: data) {
             self.enabledTables = Set(tables)
         } else {
@@ -330,35 +334,35 @@ final class AppState {
         // Load favorites from shared store (migrate from UserDefaults if needed)
         let storedFavorites = FavoritesStore.shared.readFavorites()
         if storedFavorites.isEmpty,
-           let data = UserDefaults.standard.data(forKey: "favorites"),
+           let data = UserDefaults.standard.data(forKey: UserDefaultsKeys.favorites),
            let savedFavorites = try? JSONDecoder().decode([FavoriteQuery].self, from: data) {
             // Migrate from UserDefaults to shared file store
             FavoritesStore.shared.replaceFavorites(savedFavorites)
             self.favorites = savedFavorites
             // Clear old UserDefaults data after migration
-            UserDefaults.standard.removeObject(forKey: "favorites")
+            UserDefaults.standard.removeObject(forKey: UserDefaultsKeys.favorites)
         } else {
             self.favorites = storedFavorites
         }
 
         // Load recent exports
-        if let data = UserDefaults.standard.data(forKey: "recentExports"),
+        if let data = UserDefaults.standard.data(forKey: UserDefaultsKeys.recentExports),
            let savedExports = try? JSONDecoder().decode([RecentExport].self, from: data) {
             self.recentExports = savedExports
         }
 
         // Load MCP settings
-        self.mcpServerEnabled = UserDefaults.standard.bool(forKey: "mcpServerEnabled")
-        self.mcpAutoStart = UserDefaults.standard.bool(forKey: "mcpAutoStart")
+        self.mcpServerEnabled = UserDefaults.standard.bool(forKey: UserDefaultsKeys.mcpServerEnabled)
+        self.mcpAutoStart = UserDefaults.standard.bool(forKey: UserDefaultsKeys.mcpAutoStart)
 
         // Load AI Discovery setting (default to true)
-        let aiEnabled = UserDefaults.standard.object(forKey: "aiDiscoveryEnabled") == nil
+        let aiEnabled = UserDefaults.standard.object(forKey: UserDefaultsKeys.aiDiscoveryEnabled) == nil
             ? true
-            : UserDefaults.standard.bool(forKey: "aiDiscoveryEnabled")
+            : UserDefaults.standard.bool(forKey: UserDefaultsKeys.aiDiscoveryEnabled)
         self.aiDiscoveryEnabled = aiEnabled
 
         // Load UI settings
-        let fontScaleRaw = UserDefaults.standard.string(forKey: "fontScale") ?? FontScale.regular.rawValue
+        let fontScaleRaw = UserDefaults.standard.string(forKey: UserDefaultsKeys.fontScale) ?? FontScale.regular.rawValue
         self.fontScale = FontScale(rawValue: fontScaleRaw) ?? .regular
 
         // Initialize services
@@ -379,8 +383,8 @@ final class AppState {
 
         // Load scheduled queries and notification settings
         self.scheduledQueries = loadScheduledQueries()
-        self.schedulerEnabled = UserDefaults.standard.bool(forKey: "schedulerEnabled")
-        self.notificationsEnabled = UserDefaults.standard.bool(forKey: "notificationsEnabled")
+        self.schedulerEnabled = UserDefaults.standard.bool(forKey: UserDefaultsKeys.schedulerEnabled)
+        self.notificationsEnabled = UserDefaults.standard.bool(forKey: UserDefaultsKeys.notificationsEnabled)
 
         // Initialize scheduler service
         self.schedulerService = SchedulerService(appState: self)
@@ -698,8 +702,11 @@ final class AppState {
     }
 
     private func saveRecentExports() {
-        if let data = try? JSONEncoder().encode(recentExports) {
-            UserDefaults.standard.set(data, forKey: "recentExports")
+        do {
+            let data = try JSONEncoder().encode(recentExports)
+            UserDefaults.standard.set(data, forKey: UserDefaultsKeys.recentExports)
+        } catch {
+            logger.error("Failed to encode recentExports: \(error.localizedDescription)")
         }
     }
 

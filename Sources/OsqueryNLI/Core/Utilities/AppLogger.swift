@@ -21,4 +21,7 @@ enum AppLogger {
 
     /// Logger for osquery operations
     static let osquery = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.klaassen.OsqueryNLI", category: "Osquery")
+
+    /// Logger for keychain operations
+    static let keychain = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.klaassen.OsqueryNLI", category: "Keychain")
 }

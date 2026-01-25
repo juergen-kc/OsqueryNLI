@@ -63,200 +63,21 @@ protocol LLMServiceProtocol: Sendable {
     func cancel()
 }
 
-/// Errors specific to LLM operations
-enum LLMError: LocalizedError {
-    case notConfigured
-    case invalidAPIKey
-    case emptyInput(field: String)
-    case networkError(underlying: Error)
-    case rateLimited(retryAfter: TimeInterval?)
-    case timeout
-    case invalidResponse
-    case cannotTranslate(reason: String)
-    case cancelled
-
-    var errorDescription: String? {
-        switch self {
-        case .notConfigured:
-            return "LLM provider is not configured. Please set your API key in Settings."
-        case .invalidAPIKey:
-            return "Invalid API key. Please check your API key in Settings."
-        case .emptyInput(let field):
-            return "Cannot process request: \(field) is empty."
-        case .networkError(let error):
-            return "Network error: \(error.localizedDescription)"
-        case .rateLimited(let retry):
-            if let retry {
-                return "Rate limited. Please retry after \(Int(retry)) seconds."
-            }
-            return "Rate limited. Please try again later."
-        case .timeout:
-            return "Request timed out. Please try again."
-        case .invalidResponse:
-            return "Invalid response from LLM provider."
-        case .cannotTranslate(let reason):
-            return reason
-        case .cancelled:
-            return "Request was cancelled."
-        }
-    }
-
-    /// Whether this error is retryable
-    var isRetryable: Bool {
-        switch self {
-        case .rateLimited, .timeout, .networkError:
-            return true
-        case .notConfigured, .invalidAPIKey, .emptyInput, .invalidResponse, .cannotTranslate, .cancelled:
-            return false
-        }
-    }
-}
-
-/// Configuration for retry behavior
-struct RetryConfiguration {
-    let maxRetries: Int
-    let baseDelay: TimeInterval
-    let maxDelay: TimeInterval
-
-    static let `default` = RetryConfiguration(maxRetries: 3, baseDelay: 1.0, maxDelay: 8.0)
-
-    /// Calculate delay for a given attempt (exponential backoff)
-    func delay(for attempt: Int) -> TimeInterval {
-        let delay = baseDelay * pow(2.0, Double(attempt))
-        return min(delay, maxDelay)
-    }
-}
-
-/// Helper for executing operations with retry logic
-enum RetryHelper {
-    /// Execute an async operation with exponential backoff retry
-    /// - Parameters:
-    ///   - config: Retry configuration
-    ///   - operation: The async operation to execute
-    /// - Returns: The result of the operation
-    static func withRetry<T>(
-        config: RetryConfiguration = .default,
-        operation: () async throws -> T
-    ) async throws -> T {
-        var lastError: Error?
-
-        for attempt in 0...config.maxRetries {
-            do {
-                // Check for cancellation before each attempt
-                try Task.checkCancellation()
-
-                return try await operation()
-            } catch let error as LLMError {
-                lastError = error
-
-                // Don't retry non-retryable errors
-                guard error.isRetryable else {
-                    throw error
-                }
-
-                // Don't retry if we've exhausted attempts
-                guard attempt < config.maxRetries else {
-                    throw error
-                }
-
-                // Calculate delay, respecting rate limit retry-after if available
-                var delay = config.delay(for: attempt)
-                if case .rateLimited(let retryAfter) = error, let retryAfter {
-                    delay = max(delay, retryAfter)
-                }
-
-                // Wait before retrying
-                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-            } catch is CancellationError {
-                throw LLMError.cancelled
-            } catch {
-                // For non-LLMError errors (shouldn't happen, but be safe)
-                lastError = error
-                throw error
-            }
-        }
-
-        // Should never reach here, but just in case
-        throw lastError ?? LLMError.invalidResponse
-    }
-}
-
 /// Extension to add input validation and shared utility helpers
 extension LLMServiceProtocol {
     /// Validate inputs for translateToSQL
     func validateTranslationInput(query: String, schemaContext: String) throws {
-        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedSchema = schemaContext.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if trimmedQuery.isEmpty {
-            throw LLMError.emptyInput(field: "query")
-        }
-        if trimmedSchema.isEmpty {
-            throw LLMError.emptyInput(field: "schema context")
-        }
+        try LLMInputValidator.validateTranslation(query: query, schemaContext: schemaContext)
     }
 
     /// Validate inputs for summarizeResults
     func validateSummarizationInput(question: String, sql: String) throws {
-        let trimmedQuestion = question.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedSQL = sql.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if trimmedQuestion.isEmpty {
-            throw LLMError.emptyInput(field: "question")
-        }
-        if trimmedSQL.isEmpty {
-            throw LLMError.emptyInput(field: "SQL")
-        }
+        try LLMInputValidator.validateSummarization(question: question, sql: sql)
     }
 
     /// Clean SQL response by removing markdown code fences and trimming whitespace
-    /// This is shared across all LLM services since models often wrap SQL in markdown
     func cleanSQLResponse(_ text: String) -> String {
-        text
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "```sql", with: "")
-            .replacingOccurrences(of: "```", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-}
-
-/// Helper for handling common HTTP response status codes from LLM APIs
-enum HTTPStatusHandler {
-    /// Handle HTTP status code and throw appropriate LLMError if needed
-    /// - Parameters:
-    ///   - statusCode: HTTP status code from response
-    ///   - response: The HTTP response for extracting headers
-    ///   - data: Response data for parsing error messages
-    ///   - parseError: Closure to parse provider-specific error message from data
-    /// - Throws: LLMError for non-200 status codes
-    static func handle(
-        statusCode: Int,
-        response: HTTPURLResponse,
-        data: Data,
-        serviceName: String,
-        parseError: (Data) -> String?
-    ) throws {
-        switch statusCode {
-        case 200:
-            return // Success, no error
-        case 401:
-            throw LLMError.invalidAPIKey
-        case 429:
-            let retryAfter = response.value(forHTTPHeaderField: "retry-after")
-                .flatMap { Double($0) }
-            throw LLMError.rateLimited(retryAfter: retryAfter)
-        case 400...499:
-            let errorMessage = parseError(data)
-            throw LLMError.cannotTranslate(reason: errorMessage ?? "Client error: \(statusCode)")
-        case 500...599:
-            throw LLMError.networkError(underlying: NSError(
-                domain: serviceName,
-                code: statusCode,
-                userInfo: [NSLocalizedDescriptionKey: "Server error: \(statusCode)"]
-            ))
-        default:
-            throw LLMError.invalidResponse
-        }
+        LLMResponseCleaner.cleanSQL(text)
     }
 }
 
